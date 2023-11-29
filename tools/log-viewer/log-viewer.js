@@ -104,4 +104,11 @@ async function saveGithubUrl() {
   }
 }
 
-ghSubmit.addEventListener('click', saveGithubUrl);
+function init() {
+  ghSubmit.addEventListener('click', saveGithubUrl);
+  // eslint-disable-next-line no-undef
+  const calendar = new VanillaCalendar('#calendar');
+  calendar.init();
+}
+
+init();
