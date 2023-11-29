@@ -86,19 +86,19 @@ async function getLogs(githubUrl) {
   if (githubUrl === '') return [];
   const { owner, repo, ref } = processGithubUrl(githubUrl);
   console.log(`making a call to https://admin.hlx.page/log/${owner}/${repo}/${ref}`);
-  const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}`);
-  console.log(`resp is ${resp.status} and ${resp.statusText}`);
+  const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}`, {
+    credentials: 'include',
+  });
   if (resp.status === 401) {
     addErrorMessage(`401 Unauthorized. Please login to https://admin.hlx.page/login`, ghSubmit);
     return [];
-  } 
-  if (!resp.ok) {
-    addErrorMessage(`Response not OK. Please login to https://admin.hlx.page/login`, ghSubmit);
-    return [];  
   } else {
     if (resp){
       const logsJson = await resp.json();
-      if (logsJson) return logsJson.entries;
+      if (logsJson) {
+        console.log(JSON.stringify(logsJson));
+        return logsJson.entries;
+      }
     }
   }
   return [];
