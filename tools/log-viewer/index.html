@@ -13,7 +13,7 @@
     <h1>Helix Log Viewer</h1>
   </div>
   <div>
-    Please enter your Helix project github url: <form><input type="text" autocomplete="on" id="githuburl" placeholder="github.com/amol-anand/tools or https://github.com/amol-anand/tools/tree/main"> <button type="submit" id="githubsubmit">Submit</button></form>
+    Please enter your Helix project github url: <form onsubmit="event.preventDefault();"><input type="text" autocomplete="on" id="githuburl" placeholder="github.com/amol-anand/tools or https://github.com/amol-anand/tools/tree/main"> <button type="submit" id="githubsubmit">Submit</button></form>
   </div>
   <div id="logs">
     <input type="search" class="search" placeholder="search">
