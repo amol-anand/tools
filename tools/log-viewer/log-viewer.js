@@ -36,13 +36,48 @@ function addErrorMessage(message, el) {
   el.insertAdjacentElement('afterend', errorDiv);
 }
 
-export async function saveGithubUrl() {
+function processGithubUrl(githubUrl) {
+  let extractedUrl;
+  if (githubUrl.includes('tree')) {
+    extractedUrl = githubUrl.match(regexpFull);
+  } else {
+    extractedUrl = githubUrl.match(regexpPartial);
+  }
+  const owner = extractedUrl[1];
+  const repo = extractedUrl[2];
+  const ref = extractedUrl[3] || 'main';
+  if (owner && repo && ref) return { owner, repo, ref };
+  return {};
+}
+
+async function getLogs(githubUrl) {
+  if (githubUrl === '') return [];
+  const { owner, repo, ref } = processGithubUrl(githubUrl);
+  if (owner && repo && ref) {
+    const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}`, {
+      credentials: 'include',
+    });
+    if (resp.status === 401) {
+      addErrorMessage('401 Unauthorized. Please login to https://admin.hlx.page/login', ghSubmit);
+      return [];
+    }
+    if (resp) {
+      const logsJson = await resp.json();
+      if (logsJson) {
+        console.log(JSON.stringify(logsJson));
+        return logsJson.entries;
+      }
+    }
+  }
+  return [];
+}
+
+async function saveGithubUrl() {
   // clear previous logs
   const logs = document.querySelectorAll('div.log');
   logs.forEach((log) => log.remove());
   const ghInput = document.getElementById('githuburl');
   const ghUrl = ghInput.value;
-  console.log(ghUrl);
   if (regexpFull.test(ghUrl) || regexpPartial.test(ghUrl)) {
     const githubUrlEl = document.createElement('div');
     githubUrlEl.classList.add('log');
@@ -58,6 +93,7 @@ export async function saveGithubUrl() {
       addErrorMessage(`No logs found for ${ghUrl}`, ghSubmit);
     }
     // Build list
+    // eslint-disable-next-line no-unused-vars, no-undef
     const logList = new List('logs', options, values);
   } else {
     addErrorMessage(`The Github URL does not look right.
@@ -66,42 +102,6 @@ export async function saveGithubUrl() {
     Example: www.github.com/amol-anand/tools
     Example: github.com/amol-anand/tools`, ghSubmit);
   }
-}
-
-function processGithubUrl(githubUrl) {
-  let extractedUrl;
-  if (githubUrl.includes('tree')) {
-    extractedUrl = githubUrl.match(regexpFull);
-  } else {
-    extractedUrl = githubUrl.match(regexpPartial);
-  }
-  const owner = extractedUrl[1];
-  const repo = extractedUrl[2];
-  let ref = 'main';
-  if (extractedUrl[3]) ref = extractedUrl[3];
-  return { owner, repo, ref };
-}
-
-async function getLogs(githubUrl) {
-  if (githubUrl === '') return [];
-  const { owner, repo, ref } = processGithubUrl(githubUrl);
-  console.log(`making a call to https://admin.hlx.page/log/${owner}/${repo}/${ref}`);
-  const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}`, {
-    credentials: 'include',
-  });
-  if (resp.status === 401) {
-    addErrorMessage(`401 Unauthorized. Please login to https://admin.hlx.page/login`, ghSubmit);
-    return [];
-  } else {
-    if (resp){
-      const logsJson = await resp.json();
-      if (logsJson) {
-        console.log(JSON.stringify(logsJson));
-        return logsJson.entries;
-      }
-    }
-  }
-  return [];
 }
 
 ghSubmit.addEventListener('click', saveGithubUrl);
