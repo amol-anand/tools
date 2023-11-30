@@ -24,6 +24,18 @@ img {
   max-width: 100%;
 }
 
+.log {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.log.error {
+  color: red;
+}
+
+.log.success {
+  color: green;
+}
+
 h3 {
   font-size: 16px;
   margin:0 0 0.3rem;
@@ -41,6 +53,9 @@ input {
   padding:7px 14px;
   margin-bottom:10px
 }
+
+/* input:invalid::after { content: ' ⨉'; }
+input:valid::after { content: ' ✓'; } */
 
 input:focus {
   outline:none;

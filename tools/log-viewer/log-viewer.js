@@ -28,7 +28,7 @@ function addErrorMessage(message, el) {
   const errorDiv = document.createElement('div');
   errorDiv.classList.add('log');
   errorDiv.classList.add('error');
-  errorDiv.innerText = message;
+  errorDiv.innerHTML = message;
   el.insertAdjacentElement('afterend', errorDiv);
 }
 
@@ -54,7 +54,7 @@ async function getLogs(githubUrl, from, to) {
       credentials: 'include',
     });
     if (resp.status === 401) {
-      addErrorMessage('401 Unauthorized. Please login to https://admin.hlx.page/login', ghSubmit);
+      addErrorMessage('401 Unauthorized. Please login to <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing logs', ghSubmit);
       return [];
     }
     if (resp) {
@@ -108,6 +108,29 @@ async function processForm() {
         }
       });
       // Build list
+      const table = `
+        <div id="logs">
+          <input type="search" class="search" placeholder="search">
+          <!-- <button class="sort" data-sort="user">Sort by user</button>
+          <button class="sort" data-sort="path">Sort by path</button> -->
+          <table>
+            <tbody class="list">
+              <tr>
+                <th>Timestamp</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Route</th>
+                <th>Path</th>
+                <th>User</th>
+                <th>Errors</th>
+                <th>Duration (ms)</th>
+              </tr>
+            </tbody>
+          </table>
+          <!-- <ul class="list"></ul> -->
+        </div>
+      `;
+      document.body.querySelector('main').appendChild(document.createRange().createContextualFragment(table));
       // eslint-disable-next-line no-unused-vars, no-undef
       const logList = new List('logs', options, values);
     } else {

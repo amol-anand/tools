@@ -23,9 +23,14 @@
       <input 
         id="github-url"
         name="github-url"
-        type="text" 
+        type="text"
+        required="true"
         autocomplete="on" 
         placeholder="github.com/amol-anand/tools or https://github.com/amol-anand/tools/tree/main" 
+        tooltip="Please enter the Github URL of the site you want to view logs for
+         Example: https://www.github.com/amol-anand/tools/tree/main
+         Example: www.github.com/amol-anand/tools
+         Example: github.com/amol-anand/tools"
       />
       <p>Select Date/Time range: </p>
       <label for="from-date-time">From: </label>
@@ -33,35 +38,17 @@
         id="from-date-time"
         name="from-date-time"
         type="text"
+        tooltip="Select Date/Time range when you want to start looking for logs. Default is 24 hours from current time."
       />
       <label for="to-date-time">To: </label>
       <input 
         id="to-date-time"
         name="to-date-time"
         type="text"
+        tooltip="Select Date/Time range when you want to stop looking for logs. Default is current time."
       />
       <button type="submit" id="logSubmit" name="logSubmit">View Logs</button>
     </form>
-  </div>
-  <div id="logs">
-    <input type="search" class="search" placeholder="search">
-    <!-- <button class="sort" data-sort="user">Sort by user</button>
-    <button class="sort" data-sort="path">Sort by path</button> -->
-    <table>
-      <tbody class="list">
-        <tr>
-          <th>Timestamp</th>
-          <th>Status</th>
-          <th>Method</th>
-          <th>Route</th>
-          <th>Path</th>
-          <th>User</th>
-          <th>Errors</th>
-          <th>Duration (ms)</th>
-        </tr>
-      </tbody>
-    </table>
-    <!-- <ul class="list"></ul> -->
   </div>
 </main>
 </body>
