@@ -9,10 +9,8 @@ const options = {
     'route',
     'path',
     'user',
-    'site',
-    'source',
+    'errors',
     'duration',
-    'contentBusId',
   ],
   item: `<tr>
     <td class="timestamp"></td>
@@ -21,10 +19,8 @@ const options = {
     <td class="route"></td>
     <td class="path"></td>
     <td class="user"></td>
-    <td class="site"></td>
-    <td class="source"></td>
+    <td class="errors"></td>
     <td class="duration"></td>
-    <td class="contentBusId"></td>
   </tr>`,
 };
 
@@ -86,25 +82,30 @@ async function processForm() {
     const dateObj = new Date();
     dateObj.setDate(dateObj.getDate() - 1);
     fromDT = dateObj.toISOString();
-    console.log(`FROM DATE: current time: ${dateObj.toString()}, UTC time: ${fromDT}`);
   }
   // If empty or not selected, default to now
   if (toDT === '') toDT = (new Date()).toISOString();
-  console.log(`TO DATE: current time: ${(new Date()).toString()}, UTC time: ${toDT}`);
   if (regexpFull.test(ghUrl) || regexpPartial.test(ghUrl)) {
-    // const githubUrlEl = document.createElement('div');
-    // githubUrlEl.classList.add('log');
-    // githubUrlEl.classList.add('ghUrl');
-    // githubUrlEl.innerText = ghUrl;
-    // ghSubmit.insertAdjacentElement('afterend', githubUrlEl);
     // Get logs
     const values = await getLogs(ghUrl, fromDT, toDT);
     if (values && values.length > 0) {
       // githubUrlEl.classList.add('success');
-      // update timestamps
+      // update timestamps to be readableand create links for paths
       values.forEach((value) => {
         const dateObj = new Date(value.timestamp);
         value.timestamp = dateObj.toLocaleString();
+        if (value.ref && value.repo && value.owner && value.path && value.route) {
+          if (value.route === 'preview') {
+            value.path = `<a href="https://${value.ref}--${value.repo}--${value.owner}.hlx.page${value.path}">${value.path}</a>`;
+          }
+          if (value.route === 'live') {
+            value.path = `<a href="https://${value.ref}--${value.repo}--${value.owner}.hlx.live${value.path}">${value.path}</a>`;
+          }
+        }
+        if (value.source === 'indexer') {
+          value.route = 'indexer';
+          value.path = value.changes;
+        }
       });
       // Build list
       // eslint-disable-next-line no-unused-vars, no-undef
@@ -133,7 +134,6 @@ function init() {
     actions: {
       changeToInput(e, calendar, dates, time, hours, minutes) {
         if (dates[0]) {
-          // 1995-12-17T03:24:00
           const selectedDT = new Date(`${dates[0]}T${hours}:${minutes}:00.000`);
           calendar.HTMLInputElement.value = selectedDT.toISOString();
         } else {
