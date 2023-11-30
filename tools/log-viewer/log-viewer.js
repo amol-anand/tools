@@ -72,7 +72,7 @@ async function processForm() {
   const messages = document.querySelectorAll('div.log');
   messages.forEach((message) => message.remove());
   const logs = document.querySelector('div#logs');
-  logs.remove();
+  if (logs) logs.remove();
 
   // Get the form values
   const ghUrl = document.getElementById('github-url').value;
