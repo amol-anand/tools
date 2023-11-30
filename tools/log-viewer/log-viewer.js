@@ -54,7 +54,8 @@ async function getLogs(githubUrl, from, to) {
       credentials: 'include',
     });
     if (resp.status === 401) {
-      addErrorMessage('401 Unauthorized. Please login to <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing logs', ghSubmit);
+      addErrorMessage(`401 Unauthorized. Please login to <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing logs.
+        You also need to have a role of author or admin to view logs`, ghSubmit);
       return [];
     }
     if (resp) {
@@ -109,6 +110,7 @@ async function processForm() {
           value.path = value.changes;
         }
       });
+      const valuesReversed = values.reverse();
       // Build list
       const table = `
         <div id="logs">
@@ -134,7 +136,7 @@ async function processForm() {
       `;
       document.body.querySelector('main').appendChild(document.createRange().createContextualFragment(table));
       // eslint-disable-next-line no-unused-vars, no-undef
-      const logList = new List('logs', options, values);
+      const logList = new List('logs', options, valuesReversed);
     } else {
       // githubUrlEl.classList.add('error');
       addErrorMessage(`No logs found for ${ghUrl}`, ghSubmit);

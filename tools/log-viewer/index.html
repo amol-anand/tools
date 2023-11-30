@@ -14,10 +14,10 @@
 </head>
 <body>
 <main>
-  <div>
+  <div class="hero">
     <h1>Helix Log Viewer</h1>
   </div>
-  <div>
+  <div class="form">
     <form onsubmit="event.preventDefault();">
       <label for="github-url">Github URL: </label>
       <input 
@@ -27,27 +27,27 @@
         required="true"
         autocomplete="on" 
         placeholder="github.com/amol-anand/tools or https://github.com/amol-anand/tools/tree/main" 
-        tooltip="Please enter the Github URL of the site you want to view logs for
+        title="Please enter the Github URL of the site you want to view logs for
          Example: https://www.github.com/amol-anand/tools/tree/main
          Example: www.github.com/amol-anand/tools
          Example: github.com/amol-anand/tools"
       />
-      <p>Select Date/Time range: </p>
+      <h3>Optional Date/Time range: <i>(Default is past 24 hours)</i></h3>
       <label for="from-date-time">From: </label>
       <input 
         id="from-date-time"
         name="from-date-time"
         type="text"
-        tooltip="Select Date/Time range when you want to start looking for logs. Default is 24 hours from current time."
+        title="Select Date/Time range when you want to start looking for logs. Default is 24 hours from current time."
       />
       <label for="to-date-time">To: </label>
       <input 
         id="to-date-time"
         name="to-date-time"
         type="text"
-        tooltip="Select Date/Time range when you want to stop looking for logs. Default is current time."
+        title="Select Date/Time range when you want to stop looking for logs. Default is current time."
       />
-      <button type="submit" id="logSubmit" name="logSubmit">View Logs</button>
+      <button type="submit" id="logSubmit" name="logSubmit">Submit</button>
     </form>
   </div>
 </main>
