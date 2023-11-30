@@ -1,6 +1,6 @@
 const regexpFull = /^.*github.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)\/tree\/([a-zA-Z0-9_-]+)$/;
 const regexpPartial = /^.*github.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/;
-const ghSubmit = document.getElementById('githubsubmit');
+const ghSubmit = document.getElementById('logSubmit');
 const options = {
   valueNames: [
     'timestamp',
@@ -11,8 +11,8 @@ const options = {
     'user',
     'site',
     'source',
-    'contentBusId',
     'duration',
+    'contentBusId',
   ],
   item: `<tr>
     <td class="timestamp"></td>
@@ -23,8 +23,8 @@ const options = {
     <td class="user"></td>
     <td class="site"></td>
     <td class="source"></td>
-    <td class="contentBusId"></td>
     <td class="duration"></td>
+    <td class="contentBusId"></td>
   </tr>`,
 };
 
@@ -50,11 +50,11 @@ function processGithubUrl(githubUrl) {
   return {};
 }
 
-async function getLogs(githubUrl) {
+async function getLogs(githubUrl, from, to) {
   if (githubUrl === '') return [];
   const { owner, repo, ref } = processGithubUrl(githubUrl);
   if (owner && repo && ref) {
-    const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}`, {
+    const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}?from=${from}&to=${to}`, {
       credentials: 'include',
     });
     if (resp.status === 401) {
@@ -64,7 +64,6 @@ async function getLogs(githubUrl) {
     if (resp) {
       const logsJson = await resp.json();
       if (logsJson) {
-        console.log(JSON.stringify(logsJson));
         return logsJson.entries;
       }
     }
@@ -72,29 +71,48 @@ async function getLogs(githubUrl) {
   return [];
 }
 
-async function saveGithubUrl() {
+async function processForm() {
   // clear previous logs
   const logs = document.querySelectorAll('div.log');
   logs.forEach((log) => log.remove());
-  const ghInput = document.getElementById('githuburl');
-  const ghUrl = ghInput.value;
+
+  // Get the form values
+  const ghUrl = document.getElementById('github-url').value;
+  let fromDT = document.getElementById('from-date-time').value;
+  let toDT = document.getElementById('to-date-time').value;
+  // If from / to datetime is empty, default to last 24 hours
+  if (fromDT === '') {
+    // If empty or not selected, default to yesterday
+    const dateObj = new Date();
+    dateObj.setDate(dateObj.getDate() - 1);
+    fromDT = dateObj.toISOString();
+    console.log(`FROM DATE: current time: ${dateObj.toString()}, UTC time: ${fromDT}`);
+  }
+  // If empty or not selected, default to now
+  if (toDT === '') toDT = (new Date()).toISOString();
+  console.log(`TO DATE: current time: ${(new Date()).toString()}, UTC time: ${toDT}`);
   if (regexpFull.test(ghUrl) || regexpPartial.test(ghUrl)) {
-    const githubUrlEl = document.createElement('div');
-    githubUrlEl.classList.add('log');
-    githubUrlEl.classList.add('ghUrl');
-    githubUrlEl.innerText = ghUrl;
-    ghSubmit.insertAdjacentElement('afterend', githubUrlEl);
+    // const githubUrlEl = document.createElement('div');
+    // githubUrlEl.classList.add('log');
+    // githubUrlEl.classList.add('ghUrl');
+    // githubUrlEl.innerText = ghUrl;
+    // ghSubmit.insertAdjacentElement('afterend', githubUrlEl);
     // Get logs
-    const values = await getLogs(ghUrl);
+    const values = await getLogs(ghUrl, fromDT, toDT);
     if (values && values.length > 0) {
-      githubUrlEl.classList.add('success');
+      // githubUrlEl.classList.add('success');
+      // update timestamps
+      values.forEach((value) => {
+        const dateObj = new Date(value.timestamp);
+        value.timestamp = dateObj.toLocaleString();
+      });
+      // Build list
+      // eslint-disable-next-line no-unused-vars, no-undef
+      const logList = new List('logs', options, values);
     } else {
-      githubUrlEl.classList.add('error');
+      // githubUrlEl.classList.add('error');
       addErrorMessage(`No logs found for ${ghUrl}`, ghSubmit);
     }
-    // Build list
-    // eslint-disable-next-line no-unused-vars, no-undef
-    const logList = new List('logs', options, values);
   } else {
     addErrorMessage(`The Github URL does not look right.
     Please enter the Github URL of the site you want to view logs for
@@ -105,10 +123,32 @@ async function saveGithubUrl() {
 }
 
 function init() {
-  ghSubmit.addEventListener('click', saveGithubUrl);
+  const calOptions = {
+    input: true,
+    settings: {
+      selection: {
+        time: 24,
+      },
+    },
+    actions: {
+      changeToInput(e, calendar, dates, time, hours, minutes) {
+        if (dates[0]) {
+          // 1995-12-17T03:24:00
+          const selectedDT = new Date(`${dates[0]}T${hours}:${minutes}:00.000`);
+          calendar.HTMLInputElement.value = selectedDT.toISOString();
+        } else {
+          calendar.HTMLInputElement.value = '';
+        }
+      },
+    },
+  };
   // eslint-disable-next-line no-undef
-  const calendar = new VanillaCalendar('#calendar');
-  calendar.init();
+  const fromCalendar = new VanillaCalendar('#from-date-time', calOptions);
+  // eslint-disable-next-line no-undef
+  const toCalendar = new VanillaCalendar('#to-date-time', calOptions);
+  fromCalendar.init();
+  toCalendar.init();
+  ghSubmit.addEventListener('click', processForm);
 }
 
 init();
