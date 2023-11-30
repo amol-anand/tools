@@ -68,9 +68,11 @@ async function getLogs(githubUrl, from, to) {
 }
 
 async function processForm() {
-  // clear previous logs
-  const logs = document.querySelectorAll('div.log');
-  logs.forEach((log) => log.remove());
+  // clear previous logs and any messages
+  const messages = document.querySelectorAll('div.log');
+  messages.forEach((message) => message.remove());
+  const logs = document.querySelector('div#logs');
+  logs.remove();
 
   // Get the form values
   const ghUrl = document.getElementById('github-url').value;
