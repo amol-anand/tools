@@ -11,6 +11,7 @@ const options = {
     'user',
     'errors',
     'duration',
+    'contentBusId',
   ],
   item: `<tr>
     <td class="timestamp"></td>
@@ -21,6 +22,7 @@ const options = {
     <td class="user"></td>
     <td class="errors"></td>
     <td class="duration"></td>
+    <td class="contentBusId"></td>
   </tr>`,
 };
 
@@ -128,6 +130,7 @@ async function processForm() {
                 <th>User</th>
                 <th>Errors</th>
                 <th>Duration (ms)</th>
+                <th>ContentBusID</th>
               </tr>
             </tbody>
           </table>
