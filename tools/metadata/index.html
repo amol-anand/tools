@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Accenture Newsroom - Metadata Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <script src="/tools/metadata/metadata.js" type="module"></script>
+  <link rel="stylesheet" href="/tools/metadata/metadata.css"/>
+</head>
+<body>
+<main>
+  <div class="intro">
+    <h1 id="pick-your-tags">Metadata Helper</h1>
+    <p>Use this tool to enter the relevant metadata easily paste the content into Word pre-formatted</p>
+  </div>
+  <!-- Form with 4 fields for Publish Date, Title, Abstract and Body -->
+  <form>
+    <label for="publishDate">Publish Date:</label><br>
+    <input type="date" id="publishDate" name="publishDate"><br>
+    <label for="title">Title:</label><br>
+    <input type="text" id="title" name="title"><br>
+    <label for="description">Description:</label><br>
+    <textarea id="description" name="description"></textarea><br>
+    <label for="abstract">Abstract:</label><br>
+    <textarea id="abstract" name="abstract"></textarea><br>
+    <!-- <label for="body">Body:</label><br>
+    <textarea id="body" name="body"></textarea><br> -->
+    <!-- <input type="submit" value="Submit"> -->
+  </form>
+  <div>
+    <button id="copyToClipboard">Copy to Clipboard</button>
+  </div>
+</main>
+</body>
+</html>
