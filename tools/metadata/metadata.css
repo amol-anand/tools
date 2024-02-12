@@ -1,1 +1,13 @@
 /* nothing here yet */
+
+body {
+  display: unset;
+}
+
+main {
+  padding: 5%;
+}
+
+label {
+  font-weight: bolder;
+}

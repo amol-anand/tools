@@ -4,6 +4,8 @@
   <title>Accenture Newsroom - Metadata Helper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <script src="/tools/metadata/metadata.js" type="module"></script>
+  <link rel="stylesheet" href="/styles/fonts.css"/>
+  <link rel="stylesheet" href="/styles/styles.css"/>
   <link rel="stylesheet" href="/tools/metadata/metadata.css"/>
 </head>
 <body>
@@ -15,7 +17,7 @@
   <!-- Form with 4 fields for Publish Date, Title, Abstract and Body -->
   <form>
     <label for="publishDate">Publish Date:</label><br>
-    <input type="date" id="publishDate" name="publishDate"><br>
+    <input type="datetime-local" id="publishDate" name="publishDate"><br>
     <label for="title">Title:</label><br>
     <input type="text" id="title" name="title"><br>
     <label for="description">Description:</label><br>
