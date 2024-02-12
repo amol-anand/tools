@@ -1,0 +1,13 @@
+{
+  "project": "EDS Tools",
+  "plugins": [
+    {
+      "id": "format",
+      "title": "Metadata",
+      "environments": [
+        "edit"
+      ],
+      "url": "/tools/metadata"
+    }
+  ]
+}
