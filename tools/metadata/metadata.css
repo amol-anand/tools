@@ -11,3 +11,13 @@ main {
 label {
   font-weight: bolder;
 }
+
+select, div#abstract, div#description {
+  width: 100%;
+  max-width: 50rem;
+  height: 200px;
+}
+
+.ql-toolbar {
+  max-width: 50rem;
+}

@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="/styles/fonts.css"/>
   <link rel="stylesheet" href="/styles/styles.css"/>
   <link rel="stylesheet" href="/tools/metadata/metadata.css"/>
+  <!-- Include the Quill library -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 </head>
 <body>
 <main>
@@ -21,15 +24,22 @@
     <label for="title">Title:</label><br>
     <input type="text" id="title" name="title"><br>
     <label for="description">Description:</label><br>
-    <textarea id="description" name="description"></textarea><br>
+    <div id="description" name="description"></div><br>
     <label for="abstract">Abstract:</label><br>
-    <textarea id="abstract" name="abstract"></textarea><br>
+    <div id="abstract" name="abstract"></div><br>
+    <label for="dropdown-subjects">Subject Tags:</label><br>
+    <select id="dropdown-subjects" multiple></select><br>
+    <label for="dropdown-industries">Industry Tags:</label><br>
+    <select id="dropdown-industries" multiple></select><br>
     <!-- <label for="body">Body:</label><br>
     <textarea id="body" name="body"></textarea><br> -->
-    <!-- <input type="submit" value="Submit"> -->
+    <!-- <input type="submit" value="Copy to Clipboard" onsubmit="processForm()"> -->
   </form>
   <div>
     <button id="copyToClipboard">Copy to Clipboard</button>
+    <div id="customAlert" style="display: none; background-color: yellow; padding: 10px;">
+      Metadata copied to the clipboard
+    </div>
   </div>
 </main>
 </body>
