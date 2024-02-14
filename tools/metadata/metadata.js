@@ -74,6 +74,10 @@ function processForm() {
         <td colspan="2">Metadata</td>
       </tr>
       <tr>
+        <td>Template</td>
+        <td>Article</td>
+      </tr>
+      <tr>
         <td>Published Date</td>
         <td>${publishDate}</td>
       </tr>
@@ -96,6 +100,10 @@ function processForm() {
       <tr>
         <td>Industries</td>
         <td>${industries}</td>
+      </tr>
+      <tr>
+        <td>Keywords</td>
+        <td></td>
       </tr>
     </table>
   `;
