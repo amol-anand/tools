@@ -1,3 +1,4 @@
+/* eslint-disable prefer-destructuring */
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
 
@@ -22,16 +23,14 @@ async function populateTags() {
   const response = await resp.json();
   if (response) {
     const { data } = response;
-    const subjects = data.map((item) => item.Subjects);
-    subjects.sort();
-    const industries = data.map((item) => item.Industries);
-    industries.sort();
+    const subjects = data.map((item) => [item['Subjects Text'], item['Subjects Value']]);
+    const industries = data.map((item) => [item['Industries Text'], item['Industries Value']]);
     const selectSubjects = document.getElementById('dropdown-subjects');
     subjects.forEach((item) => {
       if (item) {
         const option = document.createElement('option');
-        option.value = item;
-        option.text = item;
+        option.value = item[1];
+        option.text = item[0];
         selectSubjects.appendChild(option);
       }
     });
@@ -39,8 +38,8 @@ async function populateTags() {
     industries.forEach((item) => {
       if (item) {
         const option = document.createElement('option');
-        option.value = item;
-        option.text = item;
+        option.value = item[1];
+        option.text = item[0];
         selectIndustries.appendChild(option);
       }
     });
@@ -52,6 +51,8 @@ function processForm() {
   const title = document.getElementById('title').value;
   const description = document.querySelector('form div#description .ql-editor').innerHTML;
   const abstract = document.querySelector('form div#abstract .ql-editor').innerHTML;
+  const rawBody = document.querySelector('form div#body .ql-editor').innerHTML;
+  const body = rawBody.replace(/<p>&nbsp;<\/p>/g, '');
   const subjectsDropdown = document.getElementById('dropdown-subjects');
   const selectedSubjects = Array
     .from(subjectsDropdown.selectedOptions)
@@ -68,7 +69,8 @@ function processForm() {
     <br>
     ${abstract}
     ---
-
+    ${body}
+  
     <table border="1">
       <tr bgcolor="#f7caac">
         <td colspan="2">Metadata</td>
@@ -127,6 +129,8 @@ async function init() {
   const descriptionEditor = await new Quill(descContainer, rteOptions);
   const abstractContainer = document.querySelector('form div#abstract');
   const abstractEditor = await new Quill(abstractContainer, rteOptions);
+  const bodyContainer = document.querySelector('form div#body');
+  const bodyEditor = await new Quill(bodyContainer, rteOptions);
   const copyButton = document.getElementById('copyToClipboard');
   copyButton.addEventListener('click', () => {
     processForm();
