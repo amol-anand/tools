@@ -1,6 +1,7 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 function showAlert() {
   const alertBox = document.getElementById('customAlert');
@@ -47,10 +48,14 @@ async function populateTags() {
 }
 
 function processForm() {
-  const publishDate = document.getElementById('publishDate').value;
+  const publishDate = document.getElementById('publishDate').value || new Date().toISOString();
+  const publishDateMetadata = publishDate.replace('T', ' ');
+  const publishDateObj = new Date(publishDate);
+  const publishDateFormatted = `${months[publishDateObj.getMonth()]} ${publishDateObj.getDate()}, ${publishDateObj.getFullYear()}`;
   const title = document.getElementById('title').value;
-  const description = document.querySelector('form div#description .ql-editor').innerHTML;
-  const abstract = document.querySelector('form div#abstract .ql-editor').innerHTML;
+  const subTitle = document.getElementById('subtitle').value;
+  const rawAbstract = document.querySelector('form div#abstract .ql-editor').innerHTML;
+  const abstract = rawAbstract.replace(/<p>&nbsp;<\/p>/g, '');
   const rawBody = document.querySelector('form div#body .ql-editor').innerHTML;
   const body = rawBody.replace(/<p>&nbsp;<\/p>/g, '');
   const subjectsDropdown = document.getElementById('dropdown-subjects');
@@ -65,11 +70,13 @@ function processForm() {
   const industries = selectedIndustries.join(', ');
   // create the html to paste into the word doc
   const htmlToPaste = `
-    <h1>${title}</h1>
+    ${publishDateFormatted || ''}
+    <h1>${title || ''}</h1>
+    <h6>${subTitle || ''}</h6>
     <br>
-    ${abstract}
+    ${abstract || ''}
     ---
-    ${body}
+    ${body || ''}
   
     <table border="1">
       <tr bgcolor="#f7caac">
@@ -81,27 +88,27 @@ function processForm() {
       </tr>
       <tr>
         <td>Published Date</td>
-        <td>${publishDate}</td>
+        <td>${publishDateMetadata || ''}</td>
       </tr>
       <tr>
         <td>Title</td>
-        <td>${title}</td>
+        <td>${title || ''}</td>
       </tr>
       <tr>
         <td>Description</td>
-        <td>${description}</td>
+        <td>${abstract || ''}</td>
       </tr>
       <tr>
         <td>Abstract</td>
-        <td>${abstract}</td>
+        <td>${abstract || ''}</td>
       </tr>
       <tr>
         <td>Subjects</td>
-        <td>${subjects}</td>
+        <td>${subjects || ''}</td>
       </tr>
       <tr>
         <td>Industries</td>
-        <td>${industries}</td>
+        <td>${industries || ''}</td>
       </tr>
       <tr>
         <td>Keywords</td>
@@ -125,8 +132,6 @@ async function init() {
     },
     theme: 'snow',
   };
-  const descContainer = document.querySelector('form div#description');
-  const descriptionEditor = await new Quill(descContainer, rteOptions);
   const abstractContainer = document.querySelector('form div#abstract');
   const abstractEditor = await new Quill(abstractContainer, rteOptions);
   const bodyContainer = document.querySelector('form div#body');

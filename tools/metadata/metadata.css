@@ -12,7 +12,7 @@ label {
   font-weight: bolder;
 }
 
-select, div#abstract, div#description, div#body {
+select, div#abstract, div#body {
   width: 100%;
   max-width: 50rem;
   height: 200px;
