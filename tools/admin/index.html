@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Helix Configuration</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <script src="/tools/admin/admin.js" type="module"></script>
+  <link rel="stylesheet" href="/tools/admin/admin.css"/>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <h1>Helix Configuration</h1>
+  </div>
+  <div class="form">
+    <form onsubmit="event.preventDefault();">
+      <label for="github-url">Github URL: </label>
+      <input 
+        id="github-url"
+        name="github-url"
+        type="text"
+        required="true"
+        autocomplete="on" 
+        placeholder="github.com/amol-anand/tools or https://github.com/amol-anand/tools/tree/main" 
+        title="Please enter the Github URL of the site you want to view logs for
+         Example: https://www.github.com/amol-anand/tools/tree/main
+         Example: www.github.com/amol-anand/tools
+         Example: github.com/amol-anand/tools"
+      />
+      <button type="submit" id="ghSubmit" name="ghSubmit">Submit</button>
+    </form>
+  </div>
+  <div class="config hidden">
+    <form onsubmit="event.preventDefault();">
+      <label for="org">Organization Name: </label>
+      <input 
+        id="org"
+        name="org"
+        type="text"
+        required="true"
+        autocomplete="on" 
+        placeholder="org-name" 
+        title="Please enter the name of the organization where you want to save this configuration to"
+      />
+      <label for="site">Site Name: </label>
+      <input 
+        id="site"
+        name="site"
+        type="text"
+        required="true"
+        autocomplete="on" 
+        placeholder="site-name" 
+        title="Please enter the name of the site you want to save this configuration to"
+      />
+      <h4 for="org">Configuration: </h4>
+      <textarea 
+        id="site-config"
+        name="site-config"
+        required="true"
+        readonly="true"
+        rows="30"
+        cols="100"></textarea>
+      <img src="/tools/admin/edit-icon.svg" alt="Edit Icon"></img>
+      <button type="submit" id="configSubmit" name="configSubmit" class="hidden">Save</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>
