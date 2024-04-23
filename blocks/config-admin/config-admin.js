@@ -15,7 +15,8 @@ async function getConfig() {
     });
     if (resp.status === 401) {
       const repoSubmit = document.getElementById('repoSubmit');
-      addErrorMessage(`401 Unauthorized. Please login to <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing configurations.
+      addErrorMessage(`401 Unauthorized. Please login to <a href="https://admin.hlx.page/auth/microsoft?selectAccount=true">Microsoft IDP</a>  
+        <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing configurations.
         You also need to have a role of admin to view site configurations`, repoSubmit);
     }
     if (resp && resp.ok) {
@@ -48,8 +49,9 @@ async function postConfig() {
   const resp = await fetch(postConfigUrl, options);
   if (resp.status === 401) {
     const configSubmit = document.getElementById('configSubmit');
-    addErrorMessage(`401 Unauthorized. Please login to <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before saving configurations.
-      You also need to have a role of admin to save site configurations`, configSubmit);
+    addErrorMessage(`401 Unauthorized. Please login to <a href="https://admin.hlx.page/auth/microsoft?selectAccount=true">Microsoft IDP</a>  
+      <a href="https://admin.hlx.page/login">https://admin.hlx.page/login</a> before viewing configurations.
+      You also need to have a role of admin to view site configurations`, configSubmit);
     return;
   }
   if (resp) {
@@ -100,8 +102,8 @@ export default function decorate(block) {
     </form>
   </div>
   `;
-  const repoSubmit = block.getElementById('repoSubmit');
-  const configSubmit = block.getElementById('configSubmit');
+  const repoSubmit = block.querySelector('button[id="repoSubmit"]');
+  const configSubmit = block.querySelector('button[id="configSubmit"]');
   repoSubmit.addEventListener('click', getConfig);
   configSubmit.addEventListener('click', postConfig);
 }
