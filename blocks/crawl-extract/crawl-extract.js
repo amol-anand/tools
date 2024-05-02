@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // function showResults() {
 //   console.log(`results has ${results.length} items`);
 //   results.forEach((result) => {
