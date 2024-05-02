@@ -1,19 +1,4 @@
 /* eslint-disable no-console */
-// function showResults() {
-//   console.log(`results has ${results.length} items`);
-//   results.forEach((result) => {
-//     const resultDiv = document.createElement('div');
-//     resultDiv.classList.add('result');
-//     resultDiv.innerHTML = `
-//       <h5>${result.url}</h5>
-//       <ul>
-//         ${result.values.map((content) => `<li>${content}</li>`).join('')}
-//       </ul>
-//     `;
-//     resultsDiv.appendChild(resultDiv);
-//   });
-// }
-
 async function crawlAndExtract() {
   const sitemapUrlsVal = document.getElementById('sitemapUrls').value;
   const pathVal = document.getElementById('path').value;
