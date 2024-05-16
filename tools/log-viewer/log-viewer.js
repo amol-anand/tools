@@ -80,25 +80,28 @@ async function processForm() {
   // Get the form values
   const ghUrl = document.getElementById('github-url').value;
   let fromDT = document.getElementById('from-date-time').value;
+  if (fromDT !== '') fromDT = new Date(fromDT).toUTCString();
   let toDT = document.getElementById('to-date-time').value;
+  if (toDT !== '') toDT = new Date(toDT).toUTCString();
   // If from / to datetime is empty, default to last 24 hours
   if (fromDT === '') {
     // If empty or not selected, default to yesterday
     const dateObj = new Date();
     dateObj.setDate(dateObj.getDate() - 1);
-    fromDT = dateObj.toISOString();
+    fromDT = dateObj.toUTCString();
   }
   // If empty or not selected, default to now
-  if (toDT === '') toDT = (new Date()).toISOString();
+  if (toDT === '') toDT = (new Date()).toUTCString();
   if (regexpFull.test(ghUrl) || regexpPartial.test(ghUrl)) {
     // Get logs
     const values = await getLogs(ghUrl, fromDT, toDT);
     if (values && values.length > 0) {
       // githubUrlEl.classList.add('success');
+      const currentTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // update timestamps to be readableand create links for paths
       values.forEach((value) => {
         const dateObj = new Date(value.timestamp);
-        value.timestamp = dateObj.toLocaleString();
+        value.timestamp = `${dateObj.toLocaleString()} ${currentTimeZone}`;
         if (value.ref && value.repo && value.owner && value.path && value.route) {
           if (value.route === 'preview') {
             value.path = `<a href="https://${value.ref}--${value.repo}--${value.owner}.hlx.page${value.path}">${value.path}</a>`;
