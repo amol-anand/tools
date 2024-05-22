@@ -80,18 +80,18 @@ async function processForm() {
   // Get the form values
   const ghUrl = document.getElementById('github-url').value;
   let fromDT = document.getElementById('from-date-time').value;
-  if (fromDT !== '') fromDT = new Date(fromDT).toUTCString();
+  if (fromDT !== '') fromDT = new Date(fromDT).toISOString();
   let toDT = document.getElementById('to-date-time').value;
-  if (toDT !== '') toDT = new Date(toDT).toUTCString();
+  if (toDT !== '') toDT = new Date(toDT).toISOString();
   // If from / to datetime is empty, default to last 24 hours
   if (fromDT === '') {
     // If empty or not selected, default to yesterday
     const dateObj = new Date();
     dateObj.setDate(dateObj.getDate() - 1);
-    fromDT = dateObj.toUTCString();
+    fromDT = dateObj.toISOString();
   }
   // If empty or not selected, default to now
-  if (toDT === '') toDT = (new Date()).toUTCString();
+  if (toDT === '') toDT = (new Date()).toISOString();
   if (regexpFull.test(ghUrl) || regexpPartial.test(ghUrl)) {
     // Get logs
     const values = await getLogs(ghUrl, fromDT, toDT);
