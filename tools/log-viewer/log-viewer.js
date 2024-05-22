@@ -48,11 +48,13 @@ function processGithubUrl(githubUrl) {
   return {};
 }
 
-async function getLogs(githubUrl, from, to) {
+async function getLogs(githubUrl, from, to, nextLink) {
+  const response = [];
   if (githubUrl === '') return [];
   const { owner, repo, ref } = processGithubUrl(githubUrl);
   if (owner && repo && ref) {
-    const resp = await fetch(`https://admin.hlx.page/log/${owner}/${repo}/${ref}?from=${from}&to=${to}`, {
+    const url = nextLink || `https://admin.hlx.page/log/${owner}/${repo}/${ref}?from=${from}&to=${to}`;
+    const resp = await fetch(url, {
       credentials: 'include',
     });
     if (resp.status === 401) {
@@ -63,8 +65,13 @@ async function getLogs(githubUrl, from, to) {
     if (resp) {
       const logsJson = await resp.json();
       if (logsJson) {
-        return logsJson.entries;
+        if (logsJson.entries) response.push(logsJson.entries);
+        if (logsJson.links && logsJson.links.next) {
+          const nextLogs = await getLogs(githubUrl, from, to, logsJson.links.next);
+          response.push(nextLogs);
+        }
       }
+      return response.flat();
     }
   }
   return [];
