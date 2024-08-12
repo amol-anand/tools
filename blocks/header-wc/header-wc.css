@@ -1,12 +1,12 @@
-/* aem-header and nav layout */
-aem-header .nav-wrapper {
+/* :host and nav layout */
+:host .nav-wrapper {
   background-color: var(--background-color);
   width: 100%;
   z-index: 2;
   position: fixed;
 }
 
-aem-header nav {
+:host nav {
   box-sizing: border-box;
   display: grid;
   grid-template:
@@ -21,7 +21,7 @@ aem-header nav {
   font-family: var(--body-font-family);
 }
 
-aem-header nav[aria-expanded="true"] {
+:host nav[aria-expanded="true"] {
   grid-template:
     'hamburger brand' var(--nav-height)
     'sections sections' 1fr
@@ -31,41 +31,41 @@ aem-header nav[aria-expanded="true"] {
 }
 
 @media (min-width: 600px) {
-  aem-header nav {
+  :host nav {
     padding: 0 2rem;
   }
 }
 
 @media (min-width: 900px) {
-  aem-header nav {
+  :host nav {
     display: flex;
     justify-content: space-between;
   }
 
-  aem-header nav[aria-expanded="true"] {
+  :host nav[aria-expanded="true"] {
     min-height: 0;
     overflow: visible;
   }
 }
 
-aem-header nav p {
+:host nav p {
   margin: 0;
   line-height: 1;
 }
 
-aem-header nav a:any-link {
+:host nav a:any-link {
   color: currentcolor;
 }
 
 /* hamburger */
-aem-header nav .nav-hamburger {
+:host nav .nav-hamburger {
   grid-area: hamburger;
   height: 22px;
   display: flex;
   align-items: center;
 }
 
-aem-header nav .nav-hamburger button {
+:host nav .nav-hamburger button {
   height: 22px;
   margin: 0;
   border: 0;
@@ -78,44 +78,44 @@ aem-header nav .nav-hamburger button {
   white-space: initial;
 }
 
-aem-header nav .nav-hamburger-icon,
-aem-header nav .nav-hamburger-icon::before,
-aem-header nav .nav-hamburger-icon::after {
+:host nav .nav-hamburger-icon,
+:host nav .nav-hamburger-icon::before,
+:host nav .nav-hamburger-icon::after {
   box-sizing: border-box;
   display: block;
   position: relative;
   width: 20px;
 }
 
-aem-header nav .nav-hamburger-icon::before,
-aem-header nav .nav-hamburger-icon::after {
+:host nav .nav-hamburger-icon::before,
+:host nav .nav-hamburger-icon::after {
   content: '';
   position: absolute;
   background: currentcolor;
 }
 
-aem-header nav[aria-expanded="false"] .nav-hamburger-icon,
-aem-header nav[aria-expanded="false"] .nav-hamburger-icon::before,
-aem-header nav[aria-expanded="false"] .nav-hamburger-icon::after {
+:host nav[aria-expanded="false"] .nav-hamburger-icon,
+:host nav[aria-expanded="false"] .nav-hamburger-icon::before,
+:host nav[aria-expanded="false"] .nav-hamburger-icon::after {
   height: 2px;
   border-radius: 2px;
   background: currentcolor;
 }
 
-aem-header nav[aria-expanded="false"] .nav-hamburger-icon::before {
+:host nav[aria-expanded="false"] .nav-hamburger-icon::before {
   top: -6px;
 }
 
-aem-header nav[aria-expanded="false"] .nav-hamburger-icon::after {
+:host nav[aria-expanded="false"] .nav-hamburger-icon::after {
   top: 6px;
 }
 
-aem-header nav[aria-expanded="true"] .nav-hamburger-icon {
+:host nav[aria-expanded="true"] .nav-hamburger-icon {
   height: 22px;
 }
 
-aem-header nav[aria-expanded="true"] .nav-hamburger-icon::before,
-aem-header nav[aria-expanded="true"] .nav-hamburger-icon::after {
+:host nav[aria-expanded="true"] .nav-hamburger-icon::before,
+:host nav[aria-expanded="true"] .nav-hamburger-icon::after {
   top: 3px;
   left: 1px;
   transform: rotate(45deg);
@@ -125,21 +125,21 @@ aem-header nav[aria-expanded="true"] .nav-hamburger-icon::after {
   border-radius: 2px;
 }
 
-aem-header nav[aria-expanded="true"] .nav-hamburger-icon::after {
+:host nav[aria-expanded="true"] .nav-hamburger-icon::after {
   top: unset;
   bottom: 3px;
   transform: rotate(-45deg);
 }
 
 @media (min-width: 900px) {
-  aem-header nav .nav-hamburger {
+  :host nav .nav-hamburger {
     display: none;
     visibility: hidden;
   }
 }
 
 /* brand */
-aem-header .nav-brand {
+:host .nav-brand {
   grid-area: brand;
   flex-basis: 128px;
   font-size: var(--heading-font-size-s);
@@ -147,13 +147,13 @@ aem-header .nav-brand {
   line-height: 1;
 }
 
-aem-header nav .nav-brand img {
+:host nav .nav-brand img {
   width: 128px;
   height: auto;
 }
 
 /* sections */
-aem-header nav .nav-sections {
+:host nav .nav-sections {
   grid-area: sections;
   flex: 1 1 auto;
   display: none;
@@ -161,49 +161,49 @@ aem-header nav .nav-sections {
   background-color: var(--overlay-color);
 }
 
-aem-header nav[aria-expanded="true"] .nav-sections {
+:host nav[aria-expanded="true"] .nav-sections {
   display: block;
   visibility: visible;
   align-self: start;
 }
 
-aem-header nav .nav-sections ul  {
+:host nav .nav-sections ul  {
   list-style: none;
   padding-left: 0;
   font-size: var(--body-font-size-s);
   font-weight: 500;
 }
 
-aem-header nav .nav-sections ul > li {
+:host nav .nav-sections ul > li {
   font-weight: 700;
 }
 
-aem-header nav .nav-sections ul > li > ul {
+:host nav .nav-sections ul > li > ul {
   margin-top: 0;
 }
 
-aem-header nav .nav-sections ul > li > ul > li {
+:host nav .nav-sections ul > li > ul > li {
   font-weight: 500;
 }
 
 @media (min-width: 900px) {
-  aem-header nav .nav-sections {
+  :host nav .nav-sections {
     display: block;
     visibility: visible;
     white-space: nowrap;
   }
 
-  aem-header nav[aria-expanded="true"] .nav-sections {
+  :host nav[aria-expanded="true"] .nav-sections {
     align-self: unset;
   }
 
-  aem-header nav .nav-sections .nav-drop {
+  :host nav .nav-sections .nav-drop {
     position: relative;
     padding-right: 16px;
     cursor: pointer;
   }
 
-  aem-header nav .nav-sections .nav-drop::after {
+  :host nav .nav-sections .nav-drop::after {
     content: '';
     display: inline-block;
     position: absolute;
@@ -217,31 +217,31 @@ aem-header nav .nav-sections ul > li > ul > li {
     border-width: 2px 2px 0 0;
   }
 
-  aem-header nav .nav-sections .nav-drop[aria-expanded="true"]::after {
+  :host nav .nav-sections .nav-drop[aria-expanded="true"]::after {
     top: unset;
     bottom: .5em;
     transform: rotate(315deg);
   }
 
-  aem-header nav .nav-sections ul {
+  :host nav .nav-sections ul {
     display: flex;
     gap: 2em;
     margin: 0;
     font-size: var(--body-font-size-xs);
   }
 
-  aem-header nav .nav-sections .default-content-wrapper > ul > li {
+  :host nav .nav-sections .default-content-wrapper > ul > li {
     flex: 0 1 auto;
     position: relative;
     font-weight: 500;
   }
 
-  aem-header nav .nav-sections .default-content-wrapper > ul > li > ul {
+  :host nav .nav-sections .default-content-wrapper > ul > li > ul {
     display: none;
     position: relative;
   }
 
-  aem-header nav .nav-sections .default-content-wrapper > ul > li[aria-expanded="true"] > ul {
+  :host nav .nav-sections .default-content-wrapper > ul > li[aria-expanded="true"] > ul {
     display: block;
     position: absolute;
     left: -1em;
@@ -252,7 +252,7 @@ aem-header nav .nav-sections ul > li > ul > li {
     white-space: initial;
   }
 
-  aem-header nav .nav-sections .default-content-wrapper > ul > li > ul::before {
+  :host nav .nav-sections .default-content-wrapper > ul > li > ul::before {
     content: '';
     position: absolute;
     top: -8px;
@@ -264,12 +264,12 @@ aem-header nav .nav-sections ul > li > ul > li {
     border-bottom: 8px solid var(--highlight-background-color);
   }
 
-  aem-header nav .nav-sections .default-content-wrapper > ul > li > ul > li {
+  :host nav .nav-sections .default-content-wrapper > ul > li > ul > li {
     padding: 8px 0;
   }
 }
 
 /* tools */
-aem-header nav .nav-tools {
+:host nav .nav-tools {
   grid-area: tools;
 }
