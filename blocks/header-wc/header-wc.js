@@ -147,9 +147,9 @@ async function decorate(block) {
   block.append(navWrapper);
 }
 
-async function applyStyles() {
+async function applyStyles(path) {
   const style = document.createElement('style');
-  const css = await fetch('./header-wc.css');
+  const css = await fetch(path);
   const cssContent = await css.text();
   if (cssContent) style.textContent = cssContent;
   return style;
@@ -161,7 +161,8 @@ class AEMHeaderWebComponent extends HTMLElement {
   async connectedCallback() {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
-    shadow.prepend(await applyStyles(shadow));
+    shadow.prepend(await applyStyles('./header-wc.css'));
+    shadow.prepend(await applyStyles('/styles/styles.css'));
   }
 }
 
