@@ -162,8 +162,8 @@ class AEMHeaderWebComponent extends HTMLElement {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
     shadow.prepend(await applyStyles('./header-wc.css'));
-    // shadow.prepend(await applyStyles('/styles/styles.css'));
-    // shadow.prepend(await applyStyles('/styles/fonts.css'));
+    shadow.prepend(await applyStyles('/styles/styles.css'));
+    shadow.prepend(await applyStyles('/styles/fonts.css'));
   }
 }
 
