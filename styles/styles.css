@@ -10,7 +10,7 @@
  * governing permissions and limitations under the License.
  */
 
- :root {
+ :root, :host {
   /* colors */
   --link-color: #035fe6;
   --link-hover-color: #136ff6;
@@ -51,7 +51,7 @@
 
 
 @media (min-width: 900px) {
-  :root {
+  :root, :host {
     --heading-font-size-xxl: 60px;
     --heading-font-size-xl: 48px;
     --heading-font-size-l: 36px;

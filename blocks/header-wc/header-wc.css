@@ -1,4 +1,4 @@
-/* :host and nav layout */
+/* aem-header and nav layout */
 :host .nav-wrapper {
   background-color: var(--background-color);
   width: 100%;
