@@ -163,6 +163,7 @@ class AEMHeaderWebComponent extends HTMLElement {
     await decorate(shadow);
     shadow.prepend(await applyStyles('./header-wc.css'));
     shadow.prepend(await applyStyles('/styles/styles.css'));
+    shadow.prepend(await applyStyles('/styles/fonts.css'));
   }
 }
 
