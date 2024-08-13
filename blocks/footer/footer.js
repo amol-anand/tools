@@ -33,7 +33,7 @@ class AEMFooterWebComponent extends HTMLElement {
   async connectedCallback() {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
-    shadow.prepend(addStyles('./footer.css'));
+    shadow.prepend(addStyles('/blocks/footer/footer.css'));
     shadow.prepend(addStyles('/styles/styles.css'));
     shadow.prepend(addStyles('/styles/fonts.css'));
   }
