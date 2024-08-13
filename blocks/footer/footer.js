@@ -1,6 +1,8 @@
 import { getMetadata } from '../../scripts/aem.js';
 import { loadFragment } from '../fragment/fragment.js';
 
+const AEM_HOSTNAME = 'https://main--tools--amol-anand.hlx.page';
+
 /**
  * loads and decorates the footer
  * @param {Element} block The footer block element
@@ -10,7 +12,7 @@ export default async function decorate(block) {
   block.textContent = '';
 
   // load footer fragment
-  const footerPath = footerMeta.footer || '/footer';
+  const footerPath = footerMeta.footer || `${AEM_HOSTNAME}/footer`;
   const fragment = await loadFragment(footerPath);
 
   // decorate footer DOM
@@ -33,9 +35,9 @@ class AEMFooterWebComponent extends HTMLElement {
   async connectedCallback() {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
-    shadow.prepend(addStyles('./footer.css'));
-    shadow.prepend(addStyles('/styles/styles.css'));
-    shadow.prepend(addStyles('/styles/fonts.css'));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/blocks/aem-header/aem-header.css`));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/styles/styles.css`));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/styles/fonts.css`));
   }
 }
 

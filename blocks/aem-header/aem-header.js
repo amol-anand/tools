@@ -1,6 +1,8 @@
 import { getMetadata } from '../../scripts/aem.js';
 import { loadFragment } from '../fragment/fragment.js';
 
+const AEM_HOSTNAME = 'https://main--tools--amol-anand.hlx.page';
+
 // media query match that indicates mobile/tablet width
 const isDesktop = window.matchMedia('(min-width: 900px)');
 
@@ -93,7 +95,7 @@ function toggleMenu(nav, navSections, forceExpanded = null) {
 export default async function decorate(block) {
   // load nav as fragment
   const navMeta = getMetadata('nav');
-  const navPath = navMeta ? new URL(navMeta).pathname : '/nav';
+  const navPath = navMeta ? new URL(navMeta).pathname : `${AEM_HOSTNAME}/nav`;
   const fragment = await loadFragment(navPath);
 
   // decorate nav DOM
@@ -160,9 +162,9 @@ class AEMHeaderWebComponent extends HTMLElement {
   async connectedCallback() {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
-    shadow.prepend(addStyles('./aem-header.css'));
-    shadow.prepend(addStyles('/styles/styles.css'));
-    shadow.prepend(addStyles('/styles/fonts.css'));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/blocks/aem-header/aem-header.css`));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/styles/styles.css`));
+    shadow.prepend(addStyles(`${AEM_HOSTNAME}/styles/fonts.css`));
   }
 }
 
