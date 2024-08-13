@@ -147,12 +147,11 @@ export default async function decorate(block) {
   block.append(navWrapper);
 }
 
-async function applyStyles(path) {
-  const style = document.createElement('style');
-  const css = await fetch(path);
-  const cssContent = await css.text();
-  if (cssContent) style.textContent = cssContent;
-  return style;
+function addStyles(path) {
+  const link = document.createElement('link');
+  link.setAttribute('rel', 'stylesheet');
+  link.href = path;
+  return link;
 }
 
 // expose as a web component
@@ -161,9 +160,9 @@ class AEMHeaderWebComponent extends HTMLElement {
   async connectedCallback() {
     const shadow = this.attachShadow({ mode: 'open' });
     await decorate(shadow);
-    shadow.prepend(await applyStyles('./aem-header.css'));
-    shadow.prepend(await applyStyles('/styles/styles.css'));
-    shadow.prepend(await applyStyles('/styles/fonts.css'));
+    shadow.prepend(addStyles('./aem-header.css'));
+    shadow.prepend(addStyles('/styles/styles.css'));
+    shadow.prepend(addStyles('/styles/fonts.css'));
   }
 }
 
