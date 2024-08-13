@@ -147,7 +147,7 @@ export default async function decorate(block) {
   block.append(navWrapper);
 }
 
-async function addStyles(path) {
+function addStyles(path) {
   const link = document.createElement('link');
   link.setAttribute('rel', 'stylesheet');
   link.href = path;
