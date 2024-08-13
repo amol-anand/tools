@@ -19,3 +19,25 @@ export default async function decorate(block) {
 
   block.append(footer);
 }
+
+function addStyles(path) {
+  const link = document.createElement('link');
+  link.setAttribute('rel', 'stylesheet');
+  link.href = path;
+  return link;
+}
+
+// expose as a web component
+class AEMFooterWebComponent extends HTMLElement {
+  // connect component
+  async connectedCallback() {
+    const shadow = this.attachShadow({ mode: 'open' });
+    await decorate(shadow);
+    shadow.prepend(addStyles('./footer.css'));
+    shadow.prepend(addStyles('/styles/styles.css'));
+    shadow.prepend(addStyles('/styles/fonts.css'));
+  }
+}
+
+// register component
+customElements.define('aem-footer', AEMFooterWebComponent);
