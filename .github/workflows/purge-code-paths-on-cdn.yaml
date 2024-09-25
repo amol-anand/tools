@@ -14,7 +14,8 @@ jobs:
           echo "Payload: ${{ github.context.payload }}"
 
       - name: Purge code paths on CDN
-        env: SECRETS: ${{ toJSON(secrets) }}
+        env: 
+          SECRETS: ${{ secrets }}
         working-directory: ./.github/ci
         runs:
           using: 'node20'
