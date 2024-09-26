@@ -9,10 +9,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - id: files
-      uses: jitterbit/get-changed-files@v1
-    - run: |
-        echo "CHANGED_FILES=${{ steps.files.outputs.all }}" >> $GITHUB_ENV
+      - id: files
+        uses: jitterbit/get-changed-files@v1
+        with:
+            format: 'json'
+      - name: Get Changed Files
+        run: |
+          echo "CHANGED_FILES=${{ steps.files.outputs.all }}" >> $GITHUB_ENV
       # - name: Debug
       #   run: |
       #     echo "Status: ${{ github.event.client_payload.status }}"
