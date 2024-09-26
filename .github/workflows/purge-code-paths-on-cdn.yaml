@@ -24,12 +24,12 @@ jobs:
         working-directory: ./.github/ci
         run: npm install
 
-      - name: Purge CDN Cache for repoless sites
+      - name: Purge CDN Cache for repoless sites - Site 1
         working-directory: ./.github/ci
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
-          SITE_1_HOST: ${{ secrets.SITE_1_HOST }}
-          SITE_1_PLAN: ${{ secrets.SITE_1_PLAN }}
-          SITE_1_APITOKEN: ${{ secrets.SITE_1_APITOKEN }}
-          SITE_1_ZONEID: ${{ secrets.SITE_1_ZONEID }}
-        run: node purge-code-across-sites.js
+          HOST: ${{ secrets.SITE_1_HOST }}
+          PLAN: ${{ secrets.SITE_1_PLAN }}
+          APITOKEN: ${{ secrets.SITE_1_APITOKEN }}
+          ZONEID: ${{ secrets.SITE_1_ZONEID }}
+        run: node cf-purge-cache.js

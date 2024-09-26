@@ -1,4 +1,5 @@
-// This file is used to purge the code across all sites
+// Action to purge Cloudflare cache for a set of paths 
+// or the whole site if more than 30 paths
 
 /**
  * Purges a Cloudflare production CDN
@@ -40,18 +41,21 @@ async function purgeCloudflare(creds, paths = []) {
 try {
   const {
     ALL_CHANGED_FILES,
-    SITE_1_HOST,
-    SITE_1_ZONEID,
-    SITE_1_APITOKEN,
-    SITE_1_PLAN,
+    HOST,
+    ZONEID,
+    APITOKEN,
+    PLAN,
   } = process.env;
+  if (!ALL_CHANGED_FILES || !HOST || !ZONEID || !APITOKEN || !PLAN) {
+    throw new Error('missing required env arguments');
+  }
   const changedFilesArray = ALL_CHANGED_FILES.split(' ');
   console.info(`changedFiles: ${JSON.stringify(changedFilesArray)}`);
   await purgeCloudflare({
-    host: SITE_1_HOST,
-    zoneId: SITE_1_ZONEID,
-    apiToken: SITE_1_APITOKEN,
-    plan: SITE_1_PLAN,
+    host: HOST,
+    zoneId: ZONEID,
+    apiToken: APITOKEN,
+    plan: PLAN,
   }, changedFilesArray);
 } catch (error) {
   console.error(error.message);
