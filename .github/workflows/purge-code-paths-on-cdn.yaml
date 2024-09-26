@@ -11,11 +11,20 @@ jobs:
     steps:
       - name: Debug
         run: |
-          echo "Payload: ${{ github.context.payload }}"
+          echo "Status: ${{ github.event.client_payload.status }}"
+          echo "Path: ${{ github.event.client_payload.path }}"
+          echo "Event Payload: ${{ toJson(github.event.client_payload) }}"
+          echo "Event: ${{ toJson(github.event) }}"
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: ./.github/ci
+        run: npm install
 
-      - name: Purge code paths on CDN
-        # env: 
-        #   SECRETS: ${{ secrets }}
-        runs:
-          using: 'node20'
-          main: '.github/ci/purge-code-paths-on-cdn.js'
+      - name: Purge CDN Cache for repoless sites
+        working-directory: ./.github/ci
+        env:
+          tokens: ${{ toJson(secrets) }}
+        run: node purge-code-across-sites.js

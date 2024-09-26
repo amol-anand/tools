@@ -1,10 +1,8 @@
-const core = require('@actions/core');
-const github = require('@actions/github');
-
+// This file is used to purge the code across all sites
 try {
-  console.log(`env: ${JSON.stringify(process.env)}`);
-  const payload = JSON.stringify(github.context.payload, undefined, 2)
-  console.log(`The event payload: ${payload}`);
+  console.log(`env: ${JSON.stringify(process.env.tokens)}`);
+  // const payload = JSON.stringify(github.context.payload, undefined, 2)
+  // console.log(`The event payload: ${payload}`);
 } catch (error) {
-  core.setFailed(error.message);
+  console.error(error.message);
 }
