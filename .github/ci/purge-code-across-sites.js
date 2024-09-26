@@ -21,19 +21,19 @@ async function purgeCloudflare(creds, paths = []) {
   if (paths.length <= 30) {
     body.files = paths.map((path) => `https://${host}${path}`);
   } else {
-    log.info(`[cloudflare] ${host} key purge not supported for the plan '${plan}', 
+    console.info(`[cloudflare] ${host} key purge not supported for the plan '${plan}', 
       or more than 30 changed files. purging everything`);
     body.purge_everything = true;
   }
   try {
     const resp = await fetch(url, { method, headers, body: JSON.stringify(body) });
     if (resp.ok) {
-      log.info(`[cloudflare] ${host} purge succeeded - ${resp.status}`);
+      console.info(`[cloudflare] ${host} purge succeeded - ${resp.status}`);
     } else {
-      log.error(`[cloudflare] ${host} purge failed - ${resp.status} - ${await resp.text()}`);
+      console.error(`[cloudflare] ${host} purge failed - ${resp.status} - ${await resp.text()}`);
     }
   } catch (err) {
-    log.error(`[cloudflare] ${host} purge failed: ${err}`);
+    console.error(`[cloudflare] ${host} purge failed: ${err}`);
   }
 }
 
@@ -46,7 +46,7 @@ try {
     SITE_1_PLAN,
   } = process.env;
   const changedFilesArray = ALL_CHANGED_FILES.split(' ');
-  console.log(`changedFiles: ${JSON.stringify(changedFilesArray)}`);
+  console.info(`changedFiles: ${JSON.stringify(changedFilesArray)}`);
   await purgeCloudflare({
     host: SITE_1_HOST,
     zoneId: SITE_1_ZONEID,
