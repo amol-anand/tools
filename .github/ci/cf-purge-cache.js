@@ -1,12 +1,10 @@
-// Action to purge Cloudflare cache for a set of paths 
-// or the whole site if more than 30 paths
+const CF_CODE_TAG = '<ref>--<site>--<org>_code';
 
 /**
  * Purges a Cloudflare production CDN
  * @param {Object} creds purge credentials
- * @param {Array<string>} [params.paths] url paths to purge
  */
-async function purgeCloudflare(creds, paths = []) {
+async function purgeCloudflare(creds) {
   const {
     host,
     zoneId,
@@ -19,13 +17,8 @@ async function purgeCloudflare(creds, paths = []) {
   const method = 'POST';
 
   const body = {};
-  if (paths.length <= 30) {
-    body.files = paths.map((path) => `https://${host}${path}`);
-  } else {
-    console.info(`[cloudflare] ${host} key purge not supported for the plan '${plan}', 
-      or more than 30 changed files. purging everything`);
-    body.purge_everything = true;
-  }
+  // Purge by tag
+  body.tags = [CF_CODE_TAG];
   try {
     const resp = await fetch(url, { method, headers, body: JSON.stringify(body) });
     if (resp.ok) {
@@ -40,23 +33,26 @@ async function purgeCloudflare(creds, paths = []) {
 
 try {
   const {
-    ALL_CHANGED_FILES,
     HOST,
     ZONEID,
     APITOKEN,
     PLAN,
+    DELAY,
   } = process.env;
-  if (!ALL_CHANGED_FILES || !HOST || !ZONEID || !APITOKEN || !PLAN) {
+  if (!HOST || !ZONEID || !APITOKEN || !PLAN) {
     throw new Error('missing required env arguments');
   }
-  const changedFilesArray = ALL_CHANGED_FILES.split(' ');
-  console.info(`changedFiles: ${JSON.stringify(changedFilesArray)}`);
-  await purgeCloudflare({
-    host: HOST,
-    zoneId: ZONEID,
-    apiToken: APITOKEN,
-    plan: PLAN,
-  }, changedFilesArray);
+  // const changedFilesArray = ALL_CHANGED_FILES?.split(' ');
+  // console.info(`changedFiles: ${JSON.stringify(changedFilesArray)}`);
+  setTimeout(async () => {
+    // Code to execute after the delay or 1 second by default
+    await purgeCloudflare({
+      host: HOST,
+      zoneId: ZONEID,
+      apiToken: APITOKEN,
+      plan: PLAN,
+    });
+  }, DELAY || 1000); // 10000 milliseconds = 10 seconds
 } catch (error) {
   console.error(error.message);
 }

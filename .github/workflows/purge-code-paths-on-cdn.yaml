@@ -9,12 +9,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: "2"  # To retrieve the preceding commit.
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
+      # - uses: actions/checkout@v4
+      #   with:
+      #     fetch-depth: "2"  # To retrieve the preceding commit.
+      # - name: Get changed files
+      #   id: changed-files
+      #   uses: tj-actions/changed-files@v45
 
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -27,9 +27,40 @@ jobs:
       - name: Purge CDN Cache for repoless sites - Site 1
         working-directory: ./.github/ci
         env:
-          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          # ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
           HOST: ${{ secrets.SITE_1_HOST }}
           PLAN: ${{ secrets.SITE_1_PLAN }}
           APITOKEN: ${{ secrets.SITE_1_APITOKEN }}
           ZONEID: ${{ secrets.SITE_1_ZONEID }}
+          DELAY: 10000
+        run: node cf-purge-cache.js
+
+      - name: Purge CDN Cache for repoless sites - Site 2
+        working-directory: ./.github/ci
+        env:
+          # ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          HOST: ${{ secrets.SITE_2_HOST }}
+          PLAN: ${{ secrets.SITE_2_PLAN }}
+          APITOKEN: ${{ secrets.SITE_2_APITOKEN }}
+          ZONEID: ${{ secrets.SITE_2_ZONEID }}
+        run: node cf-purge-cache.js
+
+      - name: Purge CDN Cache for repoless sites - Site 3
+        working-directory: ./.github/ci
+        env:
+          # ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          HOST: ${{ secrets.SITE_3_HOST }}
+          PLAN: ${{ secrets.SITE_3_PLAN }}
+          APITOKEN: ${{ secrets.SITE_3_APITOKEN }}
+          ZONEID: ${{ secrets.SITE_3_ZONEID }}
+        run: node cf-purge-cache.js
+
+      - name: Purge CDN Cache for repoless sites - Site 4
+        working-directory: ./.github/ci
+        env:
+          # ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          HOST: ${{ secrets.SITE_4_HOST }}
+          PLAN: ${{ secrets.SITE_4_PLAN }}
+          APITOKEN: ${{ secrets.SITE_4_APITOKEN }}
+          ZONEID: ${{ secrets.SITE_4_ZONEID }}
         run: node cf-purge-cache.js
