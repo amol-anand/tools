@@ -5,29 +5,40 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 // This tool keeps its own package.json under tools/backfill/.
 // eslint-disable-next-line import/no-unresolved, import/no-extraneous-dependencies
 import {
+  HeadObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 
 const INDEX_FILE = '.index';
 const MAX_OBJECT_SIZE = 512 * 1024;
+const CONTENT_BUS_BUCKET = 'helix-content-bus';
+const MEDIA_LOG_BUCKET = 'helix-media-logs';
+const REDIRECT_REPORT_FILE = 'redirect-recovery-report.json';
+const HASHED_MEDIA_PATH_REGEX = /\/media_([0-9a-f]+)\.[a-z0-9]+$/i;
+const PREVIEW_MEDIA_PATH_REGEX = /\.(png|jpe?g|gif|webp|avif|svg|ico|mp4|mov|webm|avi|m4v|mkv)$/i;
+
+function logStage(message) {
+  console.log(`[backfill] ${message}`);
+}
 
 function printUsage() {
   console.log(`
 Usage:
   node tools/backfill/index.js \\
     --bundle /path/to/medialog-import-bundle.json \\
-    --bucket <bucket-name> \\
-    --content-bus-id <folder/prefix> [--dry-run] [--output-dir /path]
+    --content-bus-id <folder/prefix> [--bucket helix-media-logs] [--dry-run] [--output-dir /path]
 
 Options:
   --bundle            Path to the exported medialog import bundle JSON.
-  --bucket            Required. Target S3 bucket name.
+  --bucket            Optional compatibility argument. Must be helix-media-logs if provided.
   --content-bus-id    Required. Target folder/prefix within the bucket.
   --region            Optional AWS region override.
   --output-dir        Optional output directory for generated artifacts and reports.
@@ -35,6 +46,7 @@ Options:
   --help              Show this help.
 
 Behavior:
+  - Redirect recovery reads only from helix-content-bus/<contentBusId>/preview/.
   - If no existing .index is present, imports all valid entries.
   - If an existing .index is present, only prepends imported entries strictly older than the
     earliest existing medialog entry.
@@ -102,6 +114,120 @@ function parseArgs(argv) {
   args.outputDir = normalizeString(args.outputDir);
 
   return args;
+}
+
+function resolveMediaLogBucket(bucketArg) {
+  const bucket = normalizeString(bucketArg);
+  if (!bucket) {
+    return {
+      bucket: MEDIA_LOG_BUCKET,
+      compatibilityArgUsed: false,
+    };
+  }
+
+  if (bucket !== MEDIA_LOG_BUCKET) {
+    throw new Error(`--bucket is fixed to ${MEDIA_LOG_BUCKET}; received ${bucket}`);
+  }
+
+  return {
+    bucket: MEDIA_LOG_BUCKET,
+    compatibilityArgUsed: true,
+  };
+}
+
+function getPathnameFromRef(pathOrUrl) {
+  if (!pathOrUrl || typeof pathOrUrl !== 'string') {
+    return '';
+  }
+
+  try {
+    return new URL(pathOrUrl).pathname || '';
+  } catch {
+    return pathOrUrl.split(/[?#]/, 1)[0];
+  }
+}
+
+function normalizePathname(pathOrUrl) {
+  const pathname = getPathnameFromRef(pathOrUrl)
+    .replace(/\/+/g, '/')
+    .trim();
+  if (!pathname) {
+    return '';
+  }
+  return pathname.startsWith('/') ? pathname : `/${pathname}`;
+}
+
+function extractHashedMediaPathname(pathOrUrl) {
+  const pathname = normalizePathname(pathOrUrl);
+  return HASHED_MEDIA_PATH_REGEX.test(pathname) ? pathname : '';
+}
+
+function normalizeMediaHash(value) {
+  const hash = normalizeString(value).toLowerCase();
+  return /^[0-9a-f]+$/i.test(hash) ? hash : '';
+}
+
+function extractMediaHash(pathOrUrl) {
+  const pathname = normalizePathname(pathOrUrl);
+  const match = pathname.match(HASHED_MEDIA_PATH_REGEX);
+  return match?.[1]?.toLowerCase() || '';
+}
+
+function isHashedMediaReference(pathOrUrl) {
+  return !!extractHashedMediaPathname(pathOrUrl);
+}
+
+function normalizeOriginalFilenameValue(value) {
+  const normalizedValue = normalizeString(value);
+  if (!normalizedValue) {
+    return '';
+  }
+
+  return normalizePathname(normalizedValue) || normalizedValue;
+}
+
+function getEntryMediaHash(entry) {
+  return normalizeMediaHash(entry?.mediaHash)
+    || extractMediaHash(entry?.path)
+    || extractMediaHash(entry?.originalFilename);
+}
+
+function needsOriginalFilenameRecovery(entry) {
+  return isHashedMediaReference(entry?.path)
+    && (!entry.originalFilename || isHashedMediaReference(entry.originalFilename));
+}
+
+function previewKeyToOriginalPath(key, contentBusId) {
+  const prefix = `${contentBusId}/preview`;
+  if (!key.startsWith(prefix)) {
+    return '';
+  }
+  const remainder = key.slice(prefix.length);
+  if (!remainder) {
+    return '';
+  }
+  return remainder.startsWith('/') ? remainder : `/${remainder}`;
+}
+
+function isPreviewMediaCandidateKey(key, contentBusId) {
+  const originalPath = previewKeyToOriginalPath(key, contentBusId);
+  if (!originalPath || originalPath.endsWith('/')) {
+    return false;
+  }
+  if (isHashedMediaReference(originalPath)) {
+    return false;
+  }
+  return PREVIEW_MEDIA_PATH_REGEX.test(originalPath);
+}
+
+function choosePreferredOriginalPath(current, candidate) {
+  if (!current) {
+    return candidate;
+  }
+  if (candidate.length !== current.length) {
+    return candidate.length < current.length ? candidate : current;
+  }
+  return candidate.localeCompare(current) < 0 ? candidate : current;
 }
 
 function normalizeTimestampMs(value) {
@@ -187,10 +313,14 @@ function validateEntry(entry, index) {
     };
   }
 
+  const normalizedOriginalFilename = normalizeOriginalFilenameValue(entry.originalFilename);
   return {
     valid: true,
     entry: {
       ...entry,
+      ...(normalizedOriginalFilename
+        ? { originalFilename: normalizedOriginalFilename }
+        : {}),
       timestamp,
       sourceOrder: index,
     },
@@ -246,6 +376,218 @@ async function getObjectEntries(s3, bucket, key) {
     }
     throw err;
   }
+}
+
+async function listObjectKeys(s3, bucket, prefix) {
+  async function fetchPage(continuationToken) {
+    const result = await s3.send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    const keys = (result.Contents || [])
+      .map((item) => item?.Key)
+      .filter(Boolean);
+    if (!result.IsTruncated || !result.NextContinuationToken) {
+      return keys;
+    }
+
+    return [
+      ...keys,
+      ...await fetchPage(result.NextContinuationToken),
+    ];
+  }
+
+  return fetchPage(undefined);
+}
+
+async function headObjectMetadata(s3, bucket, key) {
+  const result = await s3.send(new HeadObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }));
+  return result.Metadata || {};
+}
+
+function createRedirectRecoveryReport(contentBusId) {
+  return {
+    enabled: true,
+    bucket: CONTENT_BUS_BUCKET,
+    prefix: `${contentBusId}/preview/`,
+    candidateEntryCount: 0,
+    listedObjectCount: 0,
+    candidateKeyCount: 0,
+    headRequestCount: 0,
+    matchedRedirectCount: 0,
+    discardedNonMediaRedirectCount: 0,
+    resolvedCount: 0,
+    unresolvedCount: 0,
+    unresolved: [],
+    collisionCount: 0,
+    collisions: [],
+    errorCount: 0,
+    errors: [],
+  };
+}
+
+function shouldWriteRedirectRecoveryReport(report) {
+  return report
+    && (
+      report.unresolvedCount > 0
+      || report.collisionCount > 0
+      || report.errorCount > 0
+    );
+}
+
+async function recoverOriginalFilenamesFromPreviewRedirects(s3, contentBusId, entries) {
+  const report = createRedirectRecoveryReport(contentBusId);
+  const candidateEntries = entries.filter(needsOriginalFilenameRecovery);
+  report.candidateEntryCount = candidateEntries.length;
+
+  if (!candidateEntries.length) {
+    logStage('Skipping preview redirect recovery; no hashed originalFilename candidates were found.');
+    return { entries, report };
+  }
+
+  const targetMediaHashes = new Set(
+    candidateEntries
+      .map(getEntryMediaHash)
+      .filter(Boolean),
+  );
+
+  logStage(`Starting preview redirect scan in ${CONTENT_BUS_BUCKET}/${report.prefix}`);
+  const listedKeys = await listObjectKeys(s3, CONTENT_BUS_BUCKET, report.prefix);
+  report.listedObjectCount = listedKeys.length;
+
+  const candidateKeys = listedKeys.filter((key) => isPreviewMediaCandidateKey(key, contentBusId));
+  report.candidateKeyCount = candidateKeys.length;
+  logStage(
+    `Listed ${report.listedObjectCount} preview object(s); `
+      + `${report.candidateKeyCount} candidate media path object(s) will be checked via HEAD.`,
+  );
+
+  const redirectsByMediaHash = new Map();
+  const collisions = new Map();
+  const redirectTargetsByMediaHash = new Map();
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const key of candidateKeys) {
+    report.headRequestCount += 1;
+    // eslint-disable-next-line no-await-in-loop
+    const metadata = await headObjectMetadata(s3, CONTENT_BUS_BUCKET, key);
+    const redirectLocation = metadata['redirect-location'];
+    if (!redirectLocation) {
+      // no redirect metadata on this object
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
+    const targetMediaHash = extractMediaHash(redirectLocation);
+    if (!targetMediaHash) {
+      report.discardedNonMediaRedirectCount += 1;
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+    if (!targetMediaHashes.has(targetMediaHash)) {
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
+    const originalPath = previewKeyToOriginalPath(key, contentBusId);
+    const targetPathname = extractHashedMediaPathname(redirectLocation);
+    report.matchedRedirectCount += 1;
+    const existing = redirectsByMediaHash.get(targetMediaHash);
+    const redirectTargets = redirectTargetsByMediaHash.get(targetMediaHash) || [];
+    if (targetPathname && !redirectTargets.includes(targetPathname)) {
+      redirectTargets.push(targetPathname);
+      redirectTargetsByMediaHash.set(targetMediaHash, redirectTargets);
+    }
+    if (!existing) {
+      redirectsByMediaHash.set(targetMediaHash, originalPath);
+      collisions.set(targetMediaHash, [originalPath]);
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
+    if (existing === originalPath) {
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
+    const paths = collisions.get(targetMediaHash) || [existing];
+    if (!paths.includes(originalPath)) {
+      paths.push(originalPath);
+    }
+    collisions.set(targetMediaHash, paths);
+    redirectsByMediaHash.set(
+      targetMediaHash,
+      choosePreferredOriginalPath(existing, originalPath),
+    );
+  }
+
+  report.collisions = [...collisions.entries()]
+    .filter(([, originalPaths]) => originalPaths.length > 1)
+    .map(([mediaHash, originalPaths]) => ({
+      mediaHash,
+      chosenOriginalFilename: redirectsByMediaHash.get(mediaHash),
+      originalPaths: [...originalPaths].sort((a, b) => a.length - b.length || a.localeCompare(b)),
+      redirectTargets: [...(redirectTargetsByMediaHash.get(mediaHash) || [])]
+        .sort((a, b) => a.localeCompare(b)),
+    }));
+  report.collisionCount = report.collisions.length;
+
+  let resolvedCount = 0;
+  const unresolved = [];
+  const recoveredEntries = entries.map((entry) => {
+    if (!needsOriginalFilenameRecovery(entry)) {
+      return entry;
+    }
+
+    const mediaHash = getEntryMediaHash(entry);
+    const originalFilename = redirectsByMediaHash.get(mediaHash);
+    const fallbackOriginalFilename = normalizeOriginalFilenameValue(
+      entry.originalFilename || entry.path,
+    );
+    if (!originalFilename) {
+      unresolved.push({
+        path: entry.path,
+        mediaHash,
+        originalFilename: fallbackOriginalFilename,
+      });
+      if (!fallbackOriginalFilename || entry.originalFilename === fallbackOriginalFilename) {
+        return entry;
+      }
+      return {
+        ...entry,
+        originalFilename: fallbackOriginalFilename,
+      };
+    }
+
+    if (entry.originalFilename !== originalFilename) {
+      resolvedCount += 1;
+    }
+    return {
+      ...entry,
+      originalFilename,
+    };
+  });
+
+  report.resolvedCount = resolvedCount;
+  report.unresolved = unresolved;
+  report.unresolvedCount = unresolved.length;
+
+  logStage(
+    'Preview redirect recovery complete: '
+      + `${report.resolvedCount} entry update(s), `
+      + `${report.unresolvedCount} unresolved, `
+      + `${report.collisionCount} collision group(s), `
+      + `${report.discardedNonMediaRedirectCount} non-media redirect(s) discarded.`,
+  );
+
+  return {
+    entries: recoveredEntries,
+    report,
+  };
 }
 
 async function readExistingIndex(s3, bucket, prefix) {
@@ -369,6 +711,7 @@ function createSummary({
   packagingErrors,
   artifacts,
   uploaded,
+  redirectRecovery,
 }) {
   const unmergedErrors = [...validationErrors, ...packagingErrors];
 
@@ -396,6 +739,7 @@ function createSummary({
       alreadyRecordedRange: createTimestampRange(alreadyRecordedEntries),
       unmergedErrorCount: unmergedErrors.length,
     },
+    redirectRecovery: redirectRecovery || createRedirectRecoveryReport(args.contentBusId),
     output: {
       directory: outputDir,
       uploaded,
@@ -421,6 +765,7 @@ function writeLocalArtifacts({
   existingIndex,
   summary,
   unmergedErrors,
+  redirectRecoveryReport,
 }) {
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -438,6 +783,10 @@ function writeLocalArtifacts({
 
   writeJson(path.join(outputDir, 'import-summary.json'), summary);
 
+  if (shouldWriteRedirectRecoveryReport(redirectRecoveryReport)) {
+    writeJson(path.join(outputDir, REDIRECT_REPORT_FILE), redirectRecoveryReport);
+  }
+
   if (unmergedErrors.length) {
     writeJson(path.join(outputDir, 'unmerged-errors.json'), unmergedErrors);
   }
@@ -450,6 +799,7 @@ async function uploadArtifacts({
   artifacts,
   newIndexContents,
 }) {
+  logStage(`Uploading ${artifacts.length} media-log artifact(s) to ${bucket}/${prefix}`);
   await artifacts.reduce(
     (promise, artifact) => promise.then(() => s3.send(new PutObjectCommand({
       Bucket: bucket,
@@ -463,14 +813,17 @@ async function uploadArtifacts({
     }))),
     Promise.resolve(),
   );
+  logStage(`Uploaded ${artifacts.length} media-log artifact(s) to ${bucket}/${prefix}`);
 
   if (newIndexContents) {
+    logStage(`Uploading media-log ${INDEX_FILE} to ${bucket}/${prefix}/${INDEX_FILE}`);
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: `${prefix}/${INDEX_FILE}`,
       Body: newIndexContents,
       ContentType: 'text/plain',
     }));
+    logStage(`Uploaded media-log ${INDEX_FILE} to ${bucket}/${prefix}/${INDEX_FILE}`);
   }
 }
 
@@ -481,6 +834,7 @@ function writeSummaryArtifact({
   existingIndex,
   summary,
   unmergedErrors,
+  redirectRecoveryReport,
 }) {
   writeLocalArtifacts({
     outputDir,
@@ -489,6 +843,7 @@ function writeSummaryArtifact({
     existingIndex,
     summary,
     unmergedErrors,
+    redirectRecoveryReport,
   });
 }
 
@@ -512,40 +867,44 @@ function printSummary(summary, artifacts) {
     );
   }
   console.log(`True unmerged errors: ${summary.importPlan.unmergedErrorCount}`);
+  console.log(`Redirect recovery resolved: ${summary.redirectRecovery.resolvedCount}`);
+  console.log(`Redirect recovery unresolved: ${summary.redirectRecovery.unresolvedCount}`);
+  console.log(`Redirect collisions: ${summary.redirectRecovery.collisionCount}`);
   console.log(`Output directory: ${summary.output.directory}`);
   console.log(`Artifacts generated: ${artifacts.length}`);
 }
 
-async function main() {
+async function main(argv = process.argv.slice(2)) {
   let args;
   try {
-    args = parseArgs(process.argv.slice(2));
+    args = parseArgs(argv);
   } catch (err) {
     console.error(err.message);
     printUsage();
-    process.exit(1);
+    return 1;
   }
 
   if (args.help) {
     printUsage();
-    return;
+    return 0;
   }
 
   if (!args.bundle) {
     console.error('Missing required --bundle');
     printUsage();
-    process.exit(1);
-  }
-
-  if (!args.bucket) {
-    console.error('Missing required --bucket');
-    process.exit(1);
+    return 1;
   }
 
   if (!args.contentBusId) {
     console.error('Missing required --content-bus-id');
-    process.exit(1);
+    return 1;
   }
+
+  const { bucket: mediaLogBucket, compatibilityArgUsed } = resolveMediaLogBucket(args.bucket);
+  args = {
+    ...args,
+    bucket: mediaLogBucket,
+  };
 
   const bundlePath = path.resolve(args.bundle);
   const outputDir = path.resolve(
@@ -556,11 +915,18 @@ async function main() {
       ),
   );
 
+  if (compatibilityArgUsed) {
+    logStage(`--bucket accepted for compatibility; media-log bucket is fixed to ${mediaLogBucket}.`);
+  }
+
+  logStage(`Loading bundle from ${bundlePath}`);
   const bundle = JSON.parse(fs.readFileSync(bundlePath, 'utf8'));
   if (!Array.isArray(bundle.entries)) {
     throw new Error('Bundle does not contain an entries array');
   }
+  logStage(`Loaded bundle with ${bundle.entries.length} raw entr${bundle.entries.length === 1 ? 'y' : 'ies'}.`);
 
+  logStage('Validating bundle entries...');
   const validationErrors = [];
   const validEntries = [];
   bundle.entries.forEach((entry, index) => {
@@ -572,28 +938,88 @@ async function main() {
     validEntries.push(validated.entry);
   });
   validEntries.sort(compareEntries);
+  logStage(`Validation complete: ${validEntries.length} valid, ${validationErrors.length} invalid.`);
 
   const s3 = new S3Client(args.region ? { region: args.region } : {});
-  const existingIndex = await readExistingIndex(s3, args.bucket, args.contentBusId);
+  logStage(`Reading existing media-log index from ${mediaLogBucket}/${args.contentBusId}/${INDEX_FILE}`);
+  const existingIndex = await readExistingIndex(s3, mediaLogBucket, args.contentBusId);
   const earliestExistingState = await getEarliestExistingState(
     s3,
-    args.bucket,
+    mediaLogBucket,
     args.contentBusId,
     existingIndex.files,
   );
 
   if (existingIndex.files.length > 0 && !Number.isFinite(earliestExistingState.firstTimestamp)) {
     throw new Error(
-      `Existing medialog index found at ${args.bucket}/${args.contentBusId}, `
+      `Existing medialog index found at ${mediaLogBucket}/${args.contentBusId}, `
       + 'but the earliest existing timestamp could not be determined safely.',
     );
+  }
+  logStage(
+    `Existing media-log boundary: ${
+      Number.isFinite(earliestExistingState.firstTimestamp)
+        ? new Date(earliestExistingState.firstTimestamp).toISOString()
+        : 'none'
+    }`,
+  );
+
+  let redirectRecoveryReport = createRedirectRecoveryReport(args.contentBusId);
+  let enrichedEntries = validEntries;
+  try {
+    const recovered = await recoverOriginalFilenamesFromPreviewRedirects(
+      s3,
+      args.contentBusId,
+      validEntries,
+    );
+    enrichedEntries = recovered.entries;
+    redirectRecoveryReport = recovered.report;
+  } catch (err) {
+    redirectRecoveryReport = createRedirectRecoveryReport(args.contentBusId);
+    redirectRecoveryReport.errorCount = 1;
+    redirectRecoveryReport.errors = [{
+      message: err.message,
+    }];
+    logStage(`Preview redirect recovery failed; aborting before upload: ${err.message}`);
+
+    const failureSummary = createSummary({
+      args: { ...args, bundle: bundlePath },
+      bundle,
+      outputDir,
+      existingState: {
+        files: existingIndex.files,
+        earliestTimestamp: earliestExistingState.firstTimestamp,
+        earliestBasename: earliestExistingState.basename,
+      },
+      mergeableEntries: [],
+      alreadyRecordedEntries: [],
+      validationErrors,
+      packagingErrors: [],
+      artifacts: [],
+      uploaded: false,
+      redirectRecovery: redirectRecoveryReport,
+    });
+
+    logStage(`Writing failure reports to ${outputDir}`);
+    writeSummaryArtifact({
+      outputDir,
+      artifacts: [],
+      newIndexContents: '',
+      existingIndex: existingIndex.rawIndex,
+      summary: failureSummary,
+      unmergedErrors: validationErrors,
+      redirectRecoveryReport,
+    });
+    printSummary(failureSummary, []);
+    return 1;
   }
 
   const existingBoundary = earliestExistingState.firstTimestamp;
   const mergeableEntries = [];
   const alreadyRecordedEntries = [];
 
-  validEntries.forEach((entry) => {
+  logStage('Applying existing-history boundary to validated entries...');
+  enrichedEntries.forEach((entry) => {
     const storedEntry = toStoredEntry(entry);
     if (Number.isFinite(existingBoundary) && entry.timestamp >= existingBoundary) {
       alreadyRecordedEntries.push(storedEntry);
@@ -601,12 +1027,18 @@ async function main() {
     }
     mergeableEntries.push(storedEntry);
   });
+  logStage(
+    `Existing-history boundary applied: ${mergeableEntries.length} mergeable, `
+      + `${alreadyRecordedEntries.length} already recorded/skipped.`,
+  );
 
+  logStage(`Packaging ${mergeableEntries.length} mergeable entr${mergeableEntries.length === 1 ? 'y' : 'ies'} into media-log artifacts...`);
   const { artifacts, packagingErrors } = buildArtifacts(mergeableEntries);
   const importableEntries = artifacts.flatMap((artifact) => artifact.entries);
   const newBasenames = artifacts.map((artifact) => artifact.basename);
   const newIndexContents = [...newBasenames, ...existingIndex.files].join('\n');
   const uploaded = false;
+  logStage(`Artifact packaging complete: ${artifacts.length} artifact(s), ${packagingErrors.length} packaging error(s).`);
 
   let summary = createSummary({
     args: { ...args, bundle: bundlePath },
@@ -623,9 +1055,11 @@ async function main() {
     packagingErrors,
     artifacts,
     uploaded,
+    redirectRecovery: redirectRecoveryReport,
   });
 
   const unmergedErrors = [...validationErrors, ...packagingErrors];
+  logStage(`Writing local artifacts and reports to ${outputDir}`);
   writeSummaryArtifact({
     outputDir,
     artifacts,
@@ -633,23 +1067,24 @@ async function main() {
     existingIndex: existingIndex.rawIndex,
     summary,
     unmergedErrors,
+    redirectRecoveryReport,
   });
 
   printSummary(summary, artifacts);
 
   if (args.dryRun) {
-    console.log('Dry run enabled. No S3 writes performed.');
-    process.exit(unmergedErrors.length ? 2 : 0);
+    logStage('Dry run enabled. No remote writes performed.');
+    return unmergedErrors.length ? 2 : 0;
   }
 
   if (!artifacts.length) {
-    console.log('No mergeable entries remain after applying the existing-history boundary. No upload performed.');
-    process.exit(unmergedErrors.length ? 2 : 0);
+    logStage('No mergeable entries remain after applying the existing-history boundary. No upload performed.');
+    return unmergedErrors.length ? 2 : 0;
   }
 
   await uploadArtifacts({
     s3,
-    bucket: args.bucket,
+    bucket: mediaLogBucket,
     prefix: args.contentBusId,
     artifacts,
     newIndexContents,
@@ -670,7 +1105,9 @@ async function main() {
     packagingErrors,
     artifacts,
     uploaded: true,
+    redirectRecovery: redirectRecoveryReport,
   });
+  logStage(`Writing final import summary to ${outputDir}`);
   writeSummaryArtifact({
     outputDir,
     artifacts,
@@ -678,13 +1115,45 @@ async function main() {
     existingIndex: existingIndex.rawIndex,
     summary,
     unmergedErrors,
+    redirectRecoveryReport,
   });
 
-  console.log('Upload complete.');
-  process.exit(unmergedErrors.length ? 2 : 0);
+  logStage('Upload complete.');
+  return unmergedErrors.length ? 2 : 0;
 }
 
-main().catch((err) => {
-  console.error(err.stack || err.message);
-  process.exit(1);
-});
+export {
+  CONTENT_BUS_BUCKET,
+  MEDIA_LOG_BUCKET,
+  REDIRECT_REPORT_FILE,
+  resolveMediaLogBucket,
+  normalizePathname,
+  extractHashedMediaPathname,
+  extractMediaHash,
+  isHashedMediaReference,
+  normalizeOriginalFilenameValue,
+  needsOriginalFilenameRecovery,
+  previewKeyToOriginalPath,
+  isPreviewMediaCandidateKey,
+  choosePreferredOriginalPath,
+  createRedirectRecoveryReport,
+  recoverOriginalFilenamesFromPreviewRedirects,
+  uploadArtifacts,
+  main,
+};
+
+function isDirectExecution() {
+  if (!process.argv[1]) {
+    return false;
+  }
+  return import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+}
+
+if (isDirectExecution()) {
+  main().then((code) => {
+    process.exit(code);
+  }).catch((err) => {
+    console.error(err.stack || err.message);
+    process.exit(1);
+  });
+}

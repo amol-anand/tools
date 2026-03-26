@@ -3,6 +3,8 @@
 One-time medialog importer for historical media-library backfill bundles.
 
 The tool reads an exported medialog bundle JSON, validates and sorts the entries,
+normalizes `originalFilename` values to clean pathnames without URL parameters,
+recovers missing hashed-entry `originalFilename` values from preview content-bus redirects,
 builds medialog `.gz` objects plus `.index`, and uploads them to S3.
 
 ## Install
@@ -15,8 +17,8 @@ npm install
 ## Inputs
 
 - `--bundle`: path to the exported medialog bundle JSON
-- `--bucket`: target S3 bucket
 - `--content-bus-id`: folder/prefix inside the bucket
+- `--bucket`: optional compatibility argument; if provided it must be `helix-media-logs`
 - `--region`: optional AWS region override
 - `--output-dir`: optional local output directory for generated artifacts and reports
 - `--dry-run`: generate artifacts locally without uploading to S3
@@ -34,7 +36,6 @@ Examples:
 AWS_PROFILE=my-profile \
 node tools/backfill/index.js \
   --bundle /path/to/medialog-import-bundle.json \
-  --bucket helix-media-logs \
   --content-bus-id <contentBusId> \
   --dry-run
 ```
@@ -45,16 +46,22 @@ AWS_SECRET_ACCESS_KEY=... \
 AWS_SESSION_TOKEN=... \
 node tools/backfill/index.js \
   --bundle /path/to/medialog-import-bundle.json \
-  --bucket helix-media-logs \
   --content-bus-id <contentBusId>
 ```
 
 ## Behavior
 
+- Redirect recovery is enabled by default and reads only from `helix-content-bus/<contentBusId>/preview/`.
+- Content-bus access is read-only and uses object listing plus metadata HEAD requests only.
+- Only redirects whose `redirect-location` points to a `media_<hash>` target are considered.
+- Redirect recovery matches those targets by extracted media hash, so named preview assets can populate `originalFilename` for hashed rendition URLs like `avif` and `webp`.
+- Generated `originalFilename` values are stored as clean pathnames such as `/images/sponsors/adventhealth.png` or `/media_<hash>.avif`, without query strings or fragments.
+- Media-log writes always target `helix-media-logs/<contentBusId>/`.
 - If no existing `.index` is found, all valid entries are imported.
 - If an existing `.index` is found, the tool prepends only entries that are strictly older than the earliest existing medialog entry.
 - Entries at or after the earliest existing timestamp are treated as already recorded and skipped.
 - Validation or packaging failures are reported separately in `unmerged-errors.json`.
+- Redirect collisions, unresolved entries, or redirect scan errors are reported in `redirect-recovery-report.json`.
 - Data files are uploaded first and `.index` is uploaded last.
 
 ## Output
@@ -71,6 +78,7 @@ That folder contains:
 - `.index`
 - `import-summary.json`
 - `existing-index.txt` when an index already exists in S3
+- `redirect-recovery-report.json` when redirect recovery finds collisions, unresolved entries, or scan errors
 - `unmerged-errors.json` when any entries fail validation or packaging
 
 ## Typical Workflow
