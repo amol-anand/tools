@@ -19,14 +19,45 @@ import {
 
 const INDEX_FILE = '.index';
 const MAX_OBJECT_SIZE = 512 * 1024;
+const LIST_OBJECTS_PAGE_SIZE = 1000;
+const HEAD_REQUEST_CONCURRENCY = 32;
 const CONTENT_BUS_BUCKET = 'helix-content-bus';
 const MEDIA_LOG_BUCKET = 'helix-media-logs';
 const REDIRECT_REPORT_FILE = 'redirect-recovery-report.json';
 const HASHED_MEDIA_PATH_REGEX = /\/media_([0-9a-f]+)\.[a-z0-9]+$/i;
 const PREVIEW_MEDIA_PATH_REGEX = /\.(png|jpe?g|gif|webp|avif|svg|ico|mp4|mov|webm|avi|m4v|mkv)$/i;
+const loggingState = {
+  runStartedAt: 0,
+};
+
+function formatDuration(durationMs) {
+  const safeMs = Math.max(0, Math.trunc(durationMs));
+  const hours = Math.floor(safeMs / 3600000);
+  const minutes = Math.floor((safeMs % 3600000) / 60000);
+  const seconds = Math.floor((safeMs % 60000) / 1000);
+  const milliseconds = safeMs % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+}
+
+function startRunLogging(startedAt = Date.now()) {
+  loggingState.runStartedAt = startedAt;
+}
+
+function getLogPrefix() {
+  const nowMs = Date.now();
+  const timestamp = new Date(nowMs).toISOString();
+  const elapsedSuffix = loggingState.runStartedAt
+    ? ` +${formatDuration(nowMs - loggingState.runStartedAt)}`
+    : '';
+  return `[backfill ${timestamp}${elapsedSuffix}]`;
+}
 
 function logStage(message) {
-  console.log(`[backfill] ${message}`);
+  console.log(`${getLogPrefix()} ${message}`);
+}
+
+function logError(message) {
+  console.error(`${getLogPrefix()} ${message}`);
 }
 
 function printUsage() {
@@ -383,6 +414,7 @@ async function listObjectKeys(s3, bucket, prefix) {
     const result = await s3.send(new ListObjectsV2Command({
       Bucket: bucket,
       Prefix: prefix,
+      MaxKeys: LIST_OBJECTS_PAGE_SIZE,
       ContinuationToken: continuationToken,
     }));
     const keys = (result.Contents || [])
@@ -407,6 +439,29 @@ async function headObjectMetadata(s3, bucket, key) {
     Key: key,
   }));
   return result.Metadata || {};
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  if (!items.length) {
+    return [];
+  }
+
+  const maxConcurrency = Math.max(1, Math.min(concurrency, items.length));
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      // Each worker intentionally processes one async task at a time.
+      // eslint-disable-next-line no-await-in-loop
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: maxConcurrency }, () => worker()));
+  return results;
 }
 
 function createRedirectRecoveryReport(contentBusId) {
@@ -455,42 +510,49 @@ async function recoverOriginalFilenamesFromPreviewRedirects(s3, contentBusId, en
       .filter(Boolean),
   );
 
-  logStage(`Starting preview redirect scan in ${CONTENT_BUS_BUCKET}/${report.prefix}`);
+  logStage(
+    `Starting preview redirect scan in ${CONTENT_BUS_BUCKET}/${report.prefix} `
+      + `(ListObjectsV2 page size ${LIST_OBJECTS_PAGE_SIZE}, `
+      + `HEAD concurrency ${HEAD_REQUEST_CONCURRENCY}).`,
+  );
   const listedKeys = await listObjectKeys(s3, CONTENT_BUS_BUCKET, report.prefix);
   report.listedObjectCount = listedKeys.length;
 
   const candidateKeys = listedKeys.filter((key) => isPreviewMediaCandidateKey(key, contentBusId));
   report.candidateKeyCount = candidateKeys.length;
+  report.headRequestCount = candidateKeys.length;
   logStage(
     `Listed ${report.listedObjectCount} preview object(s); `
-      + `${report.candidateKeyCount} candidate media path object(s) will be checked via HEAD.`,
+      + `${report.candidateKeyCount} candidate media path object(s) will be checked via HEAD `
+      + `with concurrency ${Math.min(HEAD_REQUEST_CONCURRENCY, Math.max(candidateKeys.length, 1))}.`,
   );
 
   const redirectsByMediaHash = new Map();
   const collisions = new Map();
   const redirectTargetsByMediaHash = new Map();
 
-  // eslint-disable-next-line no-restricted-syntax
-  for (const key of candidateKeys) {
-    report.headRequestCount += 1;
-    // eslint-disable-next-line no-await-in-loop
-    const metadata = await headObjectMetadata(s3, CONTENT_BUS_BUCKET, key);
+  const headResults = await mapWithConcurrency(
+    candidateKeys,
+    HEAD_REQUEST_CONCURRENCY,
+    async (key) => ({
+      key,
+      metadata: await headObjectMetadata(s3, CONTENT_BUS_BUCKET, key),
+    }),
+  );
+
+  headResults.forEach(({ key, metadata }) => {
     const redirectLocation = metadata['redirect-location'];
     if (!redirectLocation) {
-      // no redirect metadata on this object
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     const targetMediaHash = extractMediaHash(redirectLocation);
     if (!targetMediaHash) {
       report.discardedNonMediaRedirectCount += 1;
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
     if (!targetMediaHashes.has(targetMediaHash)) {
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     const originalPath = previewKeyToOriginalPath(key, contentBusId);
@@ -505,13 +567,11 @@ async function recoverOriginalFilenamesFromPreviewRedirects(s3, contentBusId, en
     if (!existing) {
       redirectsByMediaHash.set(targetMediaHash, originalPath);
       collisions.set(targetMediaHash, [originalPath]);
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     if (existing === originalPath) {
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     const paths = collisions.get(targetMediaHash) || [existing];
@@ -523,7 +583,7 @@ async function recoverOriginalFilenamesFromPreviewRedirects(s3, contentBusId, en
       targetMediaHash,
       choosePreferredOriginalPath(existing, originalPath),
     );
-  }
+  });
 
   report.collisions = [...collisions.entries()]
     .filter(([, originalPaths]) => originalPaths.length > 1)
@@ -875,29 +935,36 @@ function printSummary(summary, artifacts) {
 }
 
 async function main(argv = process.argv.slice(2)) {
+  const runStartedAt = Date.now();
+  startRunLogging(runStartedAt);
+  const finishRun = (code, statusMessage) => {
+    logStage(`${statusMessage} Total duration: ${formatDuration(Date.now() - runStartedAt)}.`);
+    return code;
+  };
+
   let args;
   try {
     args = parseArgs(argv);
   } catch (err) {
-    console.error(err.message);
+    logError(err.message);
     printUsage();
-    return 1;
+    return finishRun(1, 'Run failed.');
   }
 
   if (args.help) {
     printUsage();
-    return 0;
+    return finishRun(0, 'Run complete.');
   }
 
   if (!args.bundle) {
-    console.error('Missing required --bundle');
+    logError('Missing required --bundle');
     printUsage();
-    return 1;
+    return finishRun(1, 'Run failed.');
   }
 
   if (!args.contentBusId) {
-    console.error('Missing required --content-bus-id');
-    return 1;
+    logError('Missing required --content-bus-id');
+    return finishRun(1, 'Run failed.');
   }
 
   const { bucket: mediaLogBucket, compatibilityArgUsed } = resolveMediaLogBucket(args.bucket);
@@ -1011,7 +1078,7 @@ async function main(argv = process.argv.slice(2)) {
       redirectRecoveryReport,
     });
     printSummary(failureSummary, []);
-    return 1;
+    return finishRun(1, 'Run failed before upload.');
   }
 
   const existingBoundary = earliestExistingState.firstTimestamp;
@@ -1074,12 +1141,20 @@ async function main(argv = process.argv.slice(2)) {
 
   if (args.dryRun) {
     logStage('Dry run enabled. No remote writes performed.');
-    return unmergedErrors.length ? 2 : 0;
+    return finishRun(
+      unmergedErrors.length ? 2 : 0,
+      unmergedErrors.length ? 'Dry run complete with unmerged errors.' : 'Dry run complete.',
+    );
   }
 
   if (!artifacts.length) {
     logStage('No mergeable entries remain after applying the existing-history boundary. No upload performed.');
-    return unmergedErrors.length ? 2 : 0;
+    return finishRun(
+      unmergedErrors.length ? 2 : 0,
+      unmergedErrors.length
+        ? 'Run complete with unmerged errors and no upload.'
+        : 'Run complete with no upload needed.',
+    );
   }
 
   await uploadArtifacts({
@@ -1119,7 +1194,10 @@ async function main(argv = process.argv.slice(2)) {
   });
 
   logStage('Upload complete.');
-  return unmergedErrors.length ? 2 : 0;
+  return finishRun(
+    unmergedErrors.length ? 2 : 0,
+    unmergedErrors.length ? 'Run complete with unmerged errors.' : 'Run complete.',
+  );
 }
 
 export {
@@ -1153,7 +1231,10 @@ if (isDirectExecution()) {
   main().then((code) => {
     process.exit(code);
   }).catch((err) => {
-    console.error(err.stack || err.message);
+    logError(err.stack || err.message);
+    if (loggingState.runStartedAt) {
+      logError(`Run failed. Total duration: ${formatDuration(Date.now() - loggingState.runStartedAt)}.`);
+    }
     process.exit(1);
   });
 }

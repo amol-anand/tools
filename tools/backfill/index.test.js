@@ -17,7 +17,7 @@ import {
   uploadArtifacts,
 } from './index.js';
 
-function createMockS3({ contents = [], metadataByKey = new Map() } = {}) {
+function createMockS3({ contents = [], metadataByKey = new Map(), headHandler } = {}) {
   const commands = [];
 
   return {
@@ -34,6 +34,9 @@ function createMockS3({ contents = [], metadataByKey = new Map() } = {}) {
         }
 
         if (command instanceof HeadObjectCommand) {
+          if (headHandler) {
+            return headHandler(command, commands);
+          }
           return {
             Metadata: metadataByKey.get(command.input.Key) || {},
           };
@@ -162,6 +165,7 @@ test('recoverOriginalFilenamesFromPreviewRedirects uses only list/head and disca
   assert.ok(commands.every((command) => (
     command instanceof ListObjectsV2Command || command instanceof HeadObjectCommand
   )));
+  assert.strictEqual(commands[0].input.MaxKeys, 1000);
 });
 
 test('recoverOriginalFilenamesFromPreviewRedirects resolves collisions deterministically', async () => {
@@ -228,6 +232,47 @@ test('recoverOriginalFilenamesFromPreviewRedirects keeps unresolved hashed entri
     mediaHash: 'deadbeef',
     originalFilename: '/media_deadbeef.avif',
   });
+});
+
+test('recoverOriginalFilenamesFromPreviewRedirects checks HEAD metadata concurrently', async () => {
+  const contentBusId = 'foo-id';
+  const previewKeys = Array.from({ length: 12 }, (_, index) => `${contentBusId}/preview/path/${index}.png`);
+  let inFlightHeadRequests = 0;
+  let maxInFlightHeadRequests = 0;
+  const { client } = createMockS3({
+    contents: previewKeys,
+    headHandler: async (command) => {
+      inFlightHeadRequests += 1;
+      maxInFlightHeadRequests = Math.max(maxInFlightHeadRequests, inFlightHeadRequests);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      inFlightHeadRequests -= 1;
+      const fileStem = command.input.Key.match(/\/(\d+)\.png$/)?.[1];
+      return {
+        Metadata: {
+          'redirect-location': `/media_${fileStem}.png`,
+        },
+      };
+    },
+  });
+
+  const candidateEntries = previewKeys.map((key, index) => ({
+    path: `https://main--repo--owner.aem.page/media_${index}.png`,
+    originalFilename: `https://main--repo--owner.aem.page/media_${index}.png`,
+    mediaHash: String(index),
+    timestamp: index,
+    resourcePath: previewKeyToOriginalPath(key, contentBusId),
+  }));
+
+  const { report } = await recoverOriginalFilenamesFromPreviewRedirects(
+    client,
+    contentBusId,
+    candidateEntries,
+  );
+
+  assert.strictEqual(report.resolvedCount, previewKeys.length);
+  assert.ok(maxInFlightHeadRequests > 1);
 });
 
 test('uploadArtifacts writes only media-log put operations', async () => {
