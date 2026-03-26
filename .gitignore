@@ -2,9 +2,11 @@
 coverage/*
 logs/*
 node_modules/*
+tools/backfill/node_modules/
 
 helix-importer-ui
 .DS_Store
 *.bak
 .idea
 .github/ci/node_modules
+tools/backfill/.*
