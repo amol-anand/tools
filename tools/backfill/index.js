@@ -695,67 +695,119 @@ async function getEarliestExistingState(s3, bucket, prefix, existingFiles) {
   return inspectFile(0);
 }
 
-function gzipEntries(entries) {
-  const gzipBuffer = zlib.gzipSync(JSON.stringify(entries));
+function gzipEntries(serializedEntries) {
+  const gzipBuffer = zlib.gzipSync(serializedEntries);
   return { gzipBuffer };
 }
 
-function createChunkBasename(entries, chunkIndex) {
+function measureChunk(entries, startIndex, entryCount, measurementCache) {
+  if (measurementCache.has(entryCount)) {
+    return measurementCache.get(entryCount);
+  }
+
+  const chunkEntries = entries.slice(startIndex, startIndex + entryCount);
+  const serializedEntries = JSON.stringify(chunkEntries);
+  const measurement = {
+    entryCount,
+    entries: chunkEntries,
+    serializedEntries,
+    gzipBuffer: gzipEntries(serializedEntries).gzipBuffer,
+  };
+  measurementCache.set(entryCount, measurement);
+  return measurement;
+}
+
+function createChunkBasename(firstTimestamp, chunkIndex, serializedEntries) {
   const hash = crypto
     .createHash('sha1')
-    .update(JSON.stringify(entries))
+    .update(serializedEntries)
     .digest('hex')
     .slice(0, 8)
     .toUpperCase();
-  return `${formatTimestamp(entries[0].timestamp)}-${String(chunkIndex).padStart(6, '0')}-${hash}`;
+  return `${formatTimestamp(firstTimestamp)}-${String(chunkIndex).padStart(6, '0')}-${hash}`;
 }
 
 function buildArtifacts(entries) {
   const artifacts = [];
   const packagingErrors = [];
-  let currentChunk = [];
   let chunkIndex = 0;
+  let startIndex = 0;
+  let preferredChunkEntryCount = 1;
 
-  const flushCurrentChunk = () => {
-    if (!currentChunk.length) {
-      return;
-    }
-
-    const { gzipBuffer } = gzipEntries(currentChunk);
-    const basename = createChunkBasename(currentChunk, chunkIndex);
+  const appendArtifact = (measurement) => {
+    const basename = createChunkBasename(
+      measurement.entries[0].timestamp,
+      chunkIndex,
+      measurement.serializedEntries,
+    );
     artifacts.push({
       basename,
-      entries: currentChunk,
-      gzipBuffer,
-      firstTimestamp: currentChunk[0].timestamp,
-      lastTimestamp: currentChunk[currentChunk.length - 1].timestamp,
+      entries: measurement.entries,
+      gzipBuffer: measurement.gzipBuffer,
+      firstTimestamp: measurement.entries[0].timestamp,
+      lastTimestamp: measurement.entries[measurement.entries.length - 1].timestamp,
     });
     chunkIndex += 1;
-    currentChunk = [];
   };
 
-  entries.forEach((entry) => {
-    const standalone = gzipEntries([entry]);
-    if (standalone.gzipBuffer.length > MAX_OBJECT_SIZE) {
+  while (startIndex < entries.length) {
+    const remainingEntryCount = entries.length - startIndex;
+    const measurementCache = new Map();
+    const measure = (entryCount) => measureChunk(entries, startIndex, entryCount, measurementCache);
+
+    const singleEntryChunk = measure(1);
+    if (singleEntryChunk.gzipBuffer.length > MAX_OBJECT_SIZE) {
       packagingErrors.push({
-        reason: `single entry exceeds medialog object size limit (${standalone.gzipBuffer.length} bytes gzip)`,
-        entry,
+        reason: `single entry exceeds medialog object size limit (${singleEntryChunk.gzipBuffer.length} bytes gzip)`,
+        entry: entries[startIndex],
       });
-      return;
+      startIndex += 1;
+      preferredChunkEntryCount = 1;
+      continue;
     }
 
-    const candidateChunk = [...currentChunk, entry];
-    const candidate = gzipEntries(candidateChunk);
-    if (candidate.gzipBuffer.length > MAX_OBJECT_SIZE && currentChunk.length > 0) {
-      flushCurrentChunk();
-      currentChunk = [entry];
-      return;
+    let bestChunk = singleEntryChunk;
+    let low = 1;
+    let high = remainingEntryCount + 1;
+    let probe = Math.max(2, Math.min(preferredChunkEntryCount, remainingEntryCount));
+
+    while (probe > low && probe < high) {
+      const candidateChunk = measure(probe);
+      if (candidateChunk.gzipBuffer.length <= MAX_OBJECT_SIZE) {
+        bestChunk = candidateChunk;
+        low = probe;
+
+        if (probe === remainingEntryCount) {
+          break;
+        }
+
+        const nextProbe = Math.min(remainingEntryCount, probe * 2);
+        if (nextProbe === probe) {
+          break;
+        }
+        probe = nextProbe;
+        continue;
+      }
+
+      high = probe;
+      break;
     }
 
-    currentChunk = candidateChunk;
-  });
+    while (low + 1 < high) {
+      const mid = Math.floor((low + high) / 2);
+      const candidateChunk = measure(mid);
+      if (candidateChunk.gzipBuffer.length <= MAX_OBJECT_SIZE) {
+        bestChunk = candidateChunk;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
 
-  flushCurrentChunk();
+    appendArtifact(bestChunk);
+    preferredChunkEntryCount = bestChunk.entryCount;
+    startIndex += bestChunk.entryCount;
+  }
 
   return { artifacts, packagingErrors };
 }
@@ -1204,6 +1256,7 @@ export {
   CONTENT_BUS_BUCKET,
   MEDIA_LOG_BUCKET,
   REDIRECT_REPORT_FILE,
+  buildArtifacts,
   resolveMediaLogBucket,
   normalizePathname,
   extractHashedMediaPathname,

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import test from 'node:test';
 import { HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 
 import {
   CONTENT_BUS_BUCKET,
   MEDIA_LOG_BUCKET,
+  buildArtifacts,
   resolveMediaLogBucket,
   normalizePathname,
   extractHashedMediaPathname,
@@ -16,6 +18,8 @@ import {
   recoverOriginalFilenamesFromPreviewRedirects,
   uploadArtifacts,
 } from './index.js';
+
+const MAX_PACKAGED_OBJECT_BYTES = 512 * 1024;
 
 function createMockS3({ contents = [], metadataByKey = new Map(), headHandler } = {}) {
   const commands = [];
@@ -49,6 +53,28 @@ function createMockS3({ contents = [], metadataByKey = new Map(), headHandler } 
         throw new Error(`Unexpected command: ${command.constructor.name}`);
       },
     },
+  };
+}
+
+function createPayload(seed, segmentCount = 64) {
+  let payload = '';
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    payload += crypto.createHash('sha256').update(`${seed}:${index}`).digest('hex');
+  }
+
+  return payload;
+}
+
+function createStoredEntry(index, payloadSegments = 0) {
+  return {
+    timestamp: Date.UTC(2026, 0, 1) + (index * 1000),
+    operation: 'ingest',
+    path: `/media_${index}.png`,
+    resourcePath: `/assets/${index}.png`,
+    contentType: 'image/png',
+    user: 'tester@example.com',
+    ...(payloadSegments ? { payload: createPayload(index, payloadSegments) } : {}),
   };
 }
 
@@ -273,6 +299,39 @@ test('recoverOriginalFilenamesFromPreviewRedirects checks HEAD metadata concurre
 
   assert.strictEqual(report.resolvedCount, previewKeys.length);
   assert.ok(maxInFlightHeadRequests > 1);
+});
+
+test('buildArtifacts preserves entry order and keeps each artifact under the medialog size limit', () => {
+  const entries = Array.from({ length: 220 }, (_, index) => createStoredEntry(index, 128));
+
+  const { artifacts, packagingErrors } = buildArtifacts(entries);
+
+  assert.deepStrictEqual(packagingErrors, []);
+  assert.ok(artifacts.length > 1);
+  assert.deepStrictEqual(
+    artifacts.flatMap((artifact) => artifact.entries.map((entry) => entry.path)),
+    entries.map((entry) => entry.path),
+  );
+  assert.ok(artifacts.every((artifact) => artifact.gzipBuffer.length <= MAX_PACKAGED_OBJECT_BYTES));
+});
+
+test('buildArtifacts reports oversized single entries and keeps packaging remaining entries', () => {
+  const entries = [
+    createStoredEntry(0, 32),
+    createStoredEntry(1, 16384),
+    createStoredEntry(2, 32),
+  ];
+
+  const { artifacts, packagingErrors } = buildArtifacts(entries);
+
+  assert.strictEqual(packagingErrors.length, 1);
+  assert.match(packagingErrors[0].reason, /single entry exceeds medialog object size limit/);
+  assert.strictEqual(packagingErrors[0].entry.path, entries[1].path);
+  assert.deepStrictEqual(
+    artifacts.flatMap((artifact) => artifact.entries.map((entry) => entry.path)),
+    [entries[0].path, entries[2].path],
+  );
+  assert.ok(artifacts.every((artifact) => artifact.gzipBuffer.length <= MAX_PACKAGED_OBJECT_BYTES));
 });
 
 test('uploadArtifacts writes only media-log put operations', async () => {
