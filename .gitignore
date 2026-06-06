@@ -3,7 +3,9 @@ coverage/*
 logs/*
 node_modules/*
 tools/backfill/node_modules/
-
+tools/scheduling-dashboard/node_modules/
+tools/scheduling-dashboard/output/
+tools/scheduling-dashboard/.env
 helix-importer-ui
 .DS_Store
 *.bak

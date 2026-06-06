@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scheduling Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2330;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --good: #10b981;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    header .meta { color: var(--muted); font-size: 12px; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+    .stat .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .stat.good .value { color: var(--good); }
+    .stat.bad .value { color: var(--bad); }
+    .stat.warn .value { color: var(--warn); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow: hidden;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--text); }
+    .card .hint { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+    .col-12 { grid-column: span 12; }
+    .col-8 { grid-column: span 8; }
+    .col-6 { grid-column: span 6; }
+    .col-4 { grid-column: span 4; }
+    @media (max-width: 900px) {
+      .col-8, .col-6, .col-4 { grid-column: span 12; }
+    }
+    .chart-wrap { position: relative; height: 320px; }
+    .chart-wrap.tall { height: 400px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+    tr:last-child td { border-bottom: none; }
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #e0e7ff;
+    }
+    .pill.bad { background: #fef2f2; color: #b91c1c; border-color: #fee2e2; }
+    .pill.good { background: #ecfdf5; color: #047857; border-color: #d1fae5; }
+    .pill.warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+    .pill.muted { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+    .scroll { max-height: 480px; overflow: auto; }
+    .right { text-align: right; }
+    .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .controls input {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font: inherit;
+      width: 240px;
+    }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Scheduling Dashboard</h1>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <section class="summary" id="summary"></section>
+
+  <div class="grid">
+    <div class="card col-12">
+      <h2>Completed vs Failed (per day)</h2>
+      <div class="chart-wrap tall"><canvas id="dailyChart"></canvas></div>
+    </div>
+
+    <div class="card col-8">
+      <h2>Top Org / Site by Volume</h2>
+      <div class="hint">Combines completed, failed, and currently pending counts.</div>
+      <div class="chart-wrap tall"><canvas id="orgSiteChart"></canvas></div>
+    </div>
+
+    <div class="card col-4">
+      <h2>Failure Reasons</h2>
+      <div class="hint">In window only.</div>
+      <div class="chart-wrap tall"><canvas id="reasonsChart"></canvas></div>
+    </div>
+
+    <div class="card col-8">
+      <h2>Top Users (by failed + pending)</h2>
+      <div class="hint">Only failed records and schedule.json carry userId, so completed-only attribution is org/site granularity.</div>
+      <div class="chart-wrap tall"><canvas id="usersChart"></canvas></div>
+    </div>
+
+    <div class="card col-4">
+      <h2>Pending by Type</h2>
+      <div class="chart-wrap tall"><canvas id="pendingTypeChart"></canvas></div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Pending Schedule</h2>
+      <div class="controls">
+        <input type="search" id="pendingFilter" placeholder="Filter org, site, name, user..." />
+        <span id="pendingCount" class="pill muted"></span>
+      </div>
+      <div class="scroll">
+        <table id="pendingTable">
+          <thead>
+            <tr>
+              <th>Scheduled</th>
+              <th>Org</th>
+              <th>Site</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Approved</th>
+              <th>User</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Recent Failures</h2>
+      <div class="scroll">
+        <table id="failuresTable">
+          <thead>
+            <tr>
+              <th>Failed At</th>
+              <th>Org</th>
+              <th>Site</th>
+              <th>Path</th>
+              <th>Type</th>
+              <th>User</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script id="dashboard-data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  const DATA = JSON.parse(document.getElementById('dashboard-data').textContent);
+
+  function fmtPct(n) {
+    if (n === null || n === undefined) return '\u2014';
+    return (n * 100).toFixed(1) + '%';
+  }
+  function fmtInt(n) {
+    if (n === null || n === undefined) return '\u2014';
+    return Number(n).toLocaleString();
+  }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  }
+  function el(tag, attrs, children) {
+    const e = document.createElement(tag);
+    if (attrs) Object.entries(attrs).forEach(([k, v]) => {
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else e.setAttribute(k, v);
+    });
+    (children || []).forEach((c) => e.appendChild(c));
+    return e;
+  }
+
+  const s = DATA.summary;
+  document.getElementById('meta').textContent =
+    'Window: ' + s.windowFrom + ' \u2192 ' + s.windowTo +
+    ' (' + (s.windowDays === 'all' ? 'all-time' : s.windowDays + ' day(s)') + ')' +
+    ' \u00b7 Generated: ' + fmtDate(s.generatedAt);
+
+  const stats = [
+    { label: 'Completed', value: fmtInt(s.completedTotal), cls: 'good' },
+    { label: 'Failed', value: fmtInt(s.failedTotal), cls: 'bad' },
+    { label: 'Success rate', value: fmtPct(s.successRate) },
+    { label: 'Pending', value: fmtInt(s.pendingTotal), sub: fmtInt(s.pendingUnapproved) + ' unapproved', cls: s.pendingUnapproved > 0 ? 'warn' : '' },
+    { label: 'Distinct orgs', value: fmtInt(s.distinctOrgs) },
+    { label: 'Distinct sites', value: fmtInt(s.distinctSites) },
+    { label: 'Distinct users', value: fmtInt(s.distinctUsers), sub: 'failed + pending only' },
+  ];
+  const summaryEl = document.getElementById('summary');
+  stats.forEach((stat) => {
+    const card = el('div', { class: 'stat ' + (stat.cls || '') });
+    card.appendChild(el('div', { class: 'label', text: stat.label }));
+    card.appendChild(el('div', { class: 'value', text: stat.value }));
+    if (stat.sub) card.appendChild(el('div', { class: 'sub', text: stat.sub }));
+    summaryEl.appendChild(card);
+  });
+
+  const colorGood = '#10b981';
+  const colorBad = '#ef4444';
+  const colorWarn = '#f59e0b';
+  const colorAccent = '#2563eb';
+  const palette = ['#2563eb', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#0ea5e9', '#a855f7'];
+
+  Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  Chart.defaults.color = '#374151';
+
+  new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels: DATA.dailySeries.map((d) => d.date),
+      datasets: [
+        { label: 'Completed', data: DATA.dailySeries.map((d) => d.completed), backgroundColor: colorGood, stack: 's' },
+        { label: 'Failed', data: DATA.dailySeries.map((d) => d.failed), backgroundColor: colorBad, stack: 's' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 20 } },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+      },
+      plugins: { legend: { position: 'top' } },
+    },
+  });
+
+  new Chart(document.getElementById('orgSiteChart'), {
+    type: 'bar',
+    data: {
+      labels: DATA.topOrgSite.map((r) => r.org + '/' + r.site),
+      datasets: [
+        { label: 'Completed', data: DATA.topOrgSite.map((r) => r.completed), backgroundColor: colorGood, stack: 's' },
+        { label: 'Failed', data: DATA.topOrgSite.map((r) => r.failed), backgroundColor: colorBad, stack: 's' },
+        { label: 'Pending', data: DATA.topOrgSite.map((r) => r.pending), backgroundColor: colorWarn, stack: 's' },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        y: { stacked: true },
+      },
+      plugins: { legend: { position: 'top' } },
+    },
+  });
+
+  new Chart(document.getElementById('reasonsChart'), {
+    type: 'doughnut',
+    data: {
+      labels: DATA.failureReasons.map((r) => r.reason),
+      datasets: [{
+        data: DATA.failureReasons.map((r) => r.count),
+        backgroundColor: DATA.failureReasons.map((_, i) => palette[i % palette.length]),
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+
+  new Chart(document.getElementById('usersChart'), {
+    type: 'bar',
+    data: {
+      labels: DATA.topUsers.map((r) => r.userId),
+      datasets: [
+        { label: 'Failed', data: DATA.topUsers.map((r) => r.failed), backgroundColor: colorBad, stack: 's' },
+        { label: 'Pending', data: DATA.topUsers.map((r) => r.pending), backgroundColor: colorWarn, stack: 's' },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        y: { stacked: true },
+      },
+      plugins: { legend: { position: 'top' } },
+    },
+  });
+
+  const pt = DATA.pendingByType || { snapshot: 0, page: 0, unknown: 0 };
+  new Chart(document.getElementById('pendingTypeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(pt),
+      datasets: [{
+        data: Object.values(pt),
+        backgroundColor: [colorAccent, '#8b5cf6', '#9ca3af'],
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+
+  function renderPending(filter) {
+    const tbody = document.querySelector('#pendingTable tbody');
+    tbody.textContent = '';
+    const f = (filter || '').toLowerCase().trim();
+    const rows = DATA.pending.filter((r) => {
+      if (!f) return true;
+      const hay = [r.org, r.site, r.name, r.userId, r.type].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(f);
+    });
+    document.getElementById('pendingCount').textContent =
+      rows.length + (f ? ' / ' + DATA.pending.length : '') + ' entries';
+    rows.forEach((r) => {
+      const tr = el('tr');
+      tr.appendChild(el('td', { text: fmtDate(r.scheduledPublish) }));
+      tr.appendChild(el('td', { text: r.org || '' }));
+      tr.appendChild(el('td', { text: r.site || '' }));
+      tr.appendChild(el('td', { text: r.name || '' }));
+      tr.appendChild(el('td'))
+        .appendChild(el('span', { class: 'pill ' + (r.type === 'snapshot' ? '' : r.type === 'page' ? 'good' : 'muted'), text: r.type || 'unknown' }));
+      const approvedTd = el('td');
+      let approvedPill;
+      if (r.approved === true) approvedPill = el('span', { class: 'pill good', text: 'approved' });
+      else if (r.approved === false) approvedPill = el('span', { class: 'pill warn', text: 'unapproved' });
+      else approvedPill = el('span', { class: 'pill muted', text: 'unknown' });
+      approvedTd.appendChild(approvedPill);
+      tr.appendChild(approvedTd);
+      tr.appendChild(el('td', { text: r.userId || '' }));
+      tbody.appendChild(tr);
+    });
+  }
+  renderPending('');
+  document.getElementById('pendingFilter').addEventListener('input', (e) => renderPending(e.target.value));
+
+  const failTbody = document.querySelector('#failuresTable tbody');
+  DATA.recentFailures.forEach((r) => {
+    const tr = el('tr');
+    tr.appendChild(el('td', { text: fmtDate(r.failedAt) }));
+    tr.appendChild(el('td', { text: r.org || '' }));
+    tr.appendChild(el('td', { text: r.site || '' }));
+    tr.appendChild(el('td', { text: r.path || '' }));
+    tr.appendChild(el('td', { text: r.type || '' }));
+    tr.appendChild(el('td', { text: r.userId || '' }));
+    const reasonTd = el('td');
+    reasonTd.appendChild(el('span', { class: 'pill bad', text: r.reason || 'unknown' }));
+    tr.appendChild(reasonTd);
+    failTbody.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>
