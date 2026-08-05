@@ -10,3 +10,6 @@ helix-importer-ui
 .idea
 .github/ci/node_modules
 tools/backfill/.*
+node_modules/
+output/
+.env
